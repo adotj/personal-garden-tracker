@@ -65,16 +65,11 @@ export default function LaveenGardenTracker() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = fileName;   // ← Fixed: No double "plant-photos/" prefix
-
-      console.log('Uploading to path:', filePath);
+      const filePath = fileName;   // Simple path inside the bucket
 
       const { error: uploadError } = await supabase.storage
         .from('plant-photos')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true,
-        });
+        .upload(filePath, file, { upsert: true });
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
@@ -86,11 +81,10 @@ export default function LaveenGardenTracker() {
         .from('plant-photos')
         .getPublicUrl(filePath);
 
-      console.log('Public URL:', urlData.publicUrl);
       return urlData.publicUrl;
-    } catch (err: any) {
+    } catch (err) {
       console.error('Upload exception:', err);
-      toast.error('Photo upload failed - check console');
+      toast.error('Photo upload failed');
       return null;
     }
   };
@@ -251,11 +245,15 @@ export default function LaveenGardenTracker() {
             return (
               <Card key={plant.id} className="bg-white border border-[#e5e2dd] shadow-sm hover:shadow transition-all rounded-3xl overflow-hidden">
                 {plant.photo_url && (
-                  <div className="h-52 bg-gray-100">
+                  <div className="h-52 bg-gray-100 relative">
                     <img 
                       src={plant.photo_url} 
                       alt={plant.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error('Image failed to load:', plant.photo_url);
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   </div>
                 )}
