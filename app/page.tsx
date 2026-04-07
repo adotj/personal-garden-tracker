@@ -489,7 +489,6 @@ export default function LaveenGardenTracker() {
               </div>
             </div>
 
-            {/* 3-Day Forecast with Icons */}
             <div className="grid grid-cols-3 gap-4">
               {weather.forecast?.map((day: any, index: number) => (
                 <div key={index} className="text-center bg-[#fbf9f4] dark:bg-zinc-800 rounded-2xl p-5 border border-[#f0ede8] dark:border-zinc-700">
