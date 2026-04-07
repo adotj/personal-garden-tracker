@@ -3,15 +3,20 @@
 A full-stack web app to track plants, watering schedules, photos, and activity in my desert garden (Laveen, AZ).
 
 **Live Demo:** [https://laveen-garden-tracker.vercel.app](https://laveen-garden-tracker.vercel.app)  
-**Tech Stack:** Next.js 16, TypeScript, Supabase (Postgres + Storage), Tailwind CSS, shadcn/ui
+**GitHub:** [github.com/adotj/laveen-garden-tracker](https://github.com/adotj/laveen-garden-tracker)
+
+### Tech Stack
+- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui
+- **Backend/Database:** Supabase (PostgreSQL, Storage, Row Level Security)
+- **Deployment:** Vercel
 
 ### Features
-- Add, edit, and delete plants with container size and watering frequency
-- Upload photos for each plant (stored in Supabase)
-- Smart watering reminders (heat-aware for Arizona summers)
-- Activity log showing who did what and when
+- Add, edit, and delete plants with container type/size and watering frequency
+- Upload and display photos for each plant (Supabase Storage)
+- Smart, heat-aware watering reminders (adjusted for Arizona desert conditions)
+- Full activity log showing who did what and when
 - Dark mode toggle
-- Shared password protection for me and my girlfriend
+- Simple shared password protection (securely managed via environment variables)
 
 ### What I Learned
 - Building and deploying a full-stack Next.js application from scratch
@@ -21,6 +26,19 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Using `git-filter-repo` to rewrite Git history and completely remove exposed credentials from all previous commits
 - Responsive design and modern UI development with Tailwind CSS and shadcn/ui
 - Git workflow, Vercel deployment, and proper management of secrets
+
+### Challenges Faced
+- Debugging complex Supabase RLS policies for both the database and storage bucket
+- Resolving repeated CORS, build, and TypeScript errors during development
+- Learning how to securely handle credentials and clean sensitive data from Git history
+- Building logic that adapts watering schedules based on real-time weather in extreme desert heat
+
+### Future Improvements
+- Replace shared password with full Supabase Auth (individual user accounts)
+- Add plant search, filtering, and sorting
+- Watering history charts and analytics
+- Push notifications for watering reminders
+- Export garden data as CSV
 
 ### Screenshots
 
