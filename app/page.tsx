@@ -9,8 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Plus, Droplet, Edit, Trash2 } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, Cloud, CloudRain } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -26,12 +25,21 @@ type Plant = {
   location_in_garden?: string;
 };
 
+type Weather = {
+  temperature: number;
+  condition: string;
+  windSpeed: number;
+  high: number;
+  low: number;
+  icon: React.ReactNode;
+};
+
 export default function LaveenGardenTracker() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingPlant, setEditingPlant] = useState<Plant | null>(null);
+  const [weather, setWeather] = useState<Weather | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const [newPlant, setNewPlant] = useState({
     name: '',
@@ -43,6 +51,45 @@ export default function LaveenGardenTracker() {
     notes: '',
     location_in_garden: '',
   });
+
+  // Update time
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch weather for Laveen, AZ
+  const fetchWeather = async () => {
+    try {
+      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=33.36&longitude=-112.18&current=temperature_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=America/Phoenix');
+      const data = await res.json();
+
+      const current = data.current;
+      const daily = data.daily;
+
+      let condition = "Sunny";
+      let icon = <Sun className="h-8 w-8 text-amber-500" />;
+
+      if (current.weather_code >= 51 && current.weather_code <= 67) {
+        condition = "Rain";
+        icon = <CloudRain className="h-8 w-8 text-blue-500" />;
+      } else if (current.weather_code >= 3) {
+        condition = "Cloudy";
+        icon = <Cloud className="h-8 w-8 text-gray-500" />;
+      }
+
+      setWeather({
+        temperature: Math.round(current.temperature_2m),
+        condition,
+        windSpeed: Math.round(current.wind_speed_10m),
+        high: Math.round(daily.temperature_2m_max[0]),
+        low: Math.round(daily.temperature_2m_min[0]),
+        icon,
+      });
+    } catch (err) {
+      console.error("Weather fetch failed");
+    }
+  };
 
   const fetchPlants = async () => {
     const { data, error } = await supabase
@@ -57,6 +104,7 @@ export default function LaveenGardenTracker() {
 
   useEffect(() => {
     fetchPlants();
+    fetchWeather();
   }, []);
 
   const addPlant = async (e: React.FormEvent) => {
@@ -66,29 +114,7 @@ export default function LaveenGardenTracker() {
     else {
       toast.success('Plant added successfully! 🌱');
       setIsAddModalOpen(false);
-      setNewPlant({
-        name: '', species: '', container_type: 'Grow Bag', pot_size: '',
-        watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
-        notes: '', location_in_garden: ''
-      });
-      fetchPlants();
-    }
-  };
-
-  const updatePlant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingPlant) return;
-
-    const { error } = await supabase
-      .from('plants')
-      .update(editingPlant)
-      .eq('id', editingPlant.id);
-
-    if (error) toast.error('Failed to update plant');
-    else {
-      toast.success('Plant updated successfully!');
-      setIsEditModalOpen(false);
-      setEditingPlant(null);
+      setNewPlant({ name: '', species: '', container_type: 'Grow Bag', pot_size: '', watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0], notes: '', location_in_garden: '' });
       fetchPlants();
     }
   };
@@ -105,11 +131,6 @@ export default function LaveenGardenTracker() {
     await supabase.from('plants').delete().eq('id', id);
     toast.success(`${name} deleted`);
     fetchPlants();
-  };
-
-  const openEditModal = (plant: Plant) => {
-    setEditingPlant({ ...plant });
-    setIsEditModalOpen(true);
   };
 
   if (loading) {
@@ -165,13 +186,7 @@ export default function LaveenGardenTracker() {
                 </div>
                 <div>
                   <Label>Water every (days)</Label>
-                  <Input 
-                    type="number" 
-                    min="1" 
-                    required 
-                    value={newPlant.watering_frequency_days} 
-                    onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
-                  />
+                  <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
                 </div>
                 <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
                   Add to Garden
@@ -182,12 +197,36 @@ export default function LaveenGardenTracker() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className="max-w-7xl mx-auto px-6 py-10">
         <div className="mb-12">
-          <h1 className="text-5xl font-bold text-[#004c22] tracking-tight">Morning, Laveen.</h1>
-          <p className="text-[#707a6f] text-lg mt-2">Your desert sanctuary is thriving under today's sun.</p>
+          <div className="flex items-baseline gap-4">
+            <h1 className="text-5xl font-bold text-[#004c22] tracking-tight">
+              Good morning, Laveen.
+            </h1>
+            <span className="text-2xl text-[#707a6f]">
+              {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+            </span>
+          </div>
+
+          {/* Weather Widget */}
+          {weather && (
+            <div className="mt-6 bg-white rounded-3xl p-6 flex items-center gap-8 shadow-sm border border-[#e5e2dd]">
+              <div className="flex items-center gap-6">
+                {weather.icon}
+                <div>
+                  <div className="text-6xl font-light text-[#1c1c19]">{weather.temperature}°F</div>
+                  <div className="text-[#707a6f]">{weather.condition}</div>
+                </div>
+              </div>
+              <div className="text-sm text-[#707a6f] space-y-1">
+                <div>Wind: {weather.windSpeed} mph</div>
+                <div>High: {weather.high}°F • Low: {weather.low}°F</div>
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* Plant Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {plants.map((plant) => {
             const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
@@ -206,15 +245,11 @@ export default function LaveenGardenTracker() {
                       Next due: {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : '—'}
                     </p>
                   </div>
-
                   <div className="flex gap-3">
-                    <Button 
-                      onClick={() => markWatered(plant.id, plant.name)} 
-                      className="flex-1 bg-[#004c22] hover:bg-[#166534] text-white rounded-full"
-                    >
+                    <Button onClick={() => markWatered(plant.id, plant.name)} className="flex-1 bg-[#004c22] hover:bg-[#166534] text-white rounded-full">
                       <Droplet className="mr-2 h-4 w-4" /> Watered Today
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} className="border-[#e5e2dd]">
+                    <Button variant="outline" size="icon" onClick={() => alert('Edit coming soon')}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button variant="outline" size="icon" className="text-red-600 border-[#e5e2dd]" onClick={() => deletePlant(plant.id, plant.name)}>
@@ -227,39 +262,6 @@ export default function LaveenGardenTracker() {
           })}
         </div>
       </main>
-
-      {/* Edit Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-[#004c22]">Edit Plant</DialogTitle>
-          </DialogHeader>
-          {editingPlant && (
-            <form onSubmit={updatePlant} className="space-y-5">
-              <div>
-                <Label>Plant Name</Label>
-                <Input value={editingPlant.name} onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })} />
-              </div>
-              <div>
-                <Label>Size</Label>
-                <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({ ...editingPlant, pot_size: e.target.value })} />
-              </div>
-              <div>
-                <Label>Water every (days)</Label>
-                <Input 
-                  type="number" 
-                  min="1" 
-                  value={editingPlant.watering_frequency_days} 
-                  onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
-                />
-              </div>
-              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
-                Save Changes
-              </Button>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
