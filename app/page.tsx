@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2 } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -56,6 +56,8 @@ export default function LaveenGardenTracker() {
     watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
     notes: '', location_in_garden: '', photo_url: null as string | null,
   });
+  const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
+  const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -181,6 +183,13 @@ export default function LaveenGardenTracker() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const previewUrl = URL.createObjectURL(file);
+    if (isEdit) {
+      setEditPreviewUrl(previewUrl);
+    } else {
+      setNewPreviewUrl(previewUrl);
+    }
+
     setIsUploading(true);
     const photoUrl = await uploadPhoto(file);
     setIsUploading(false);
@@ -193,6 +202,18 @@ export default function LaveenGardenTracker() {
         setNewPlant({ ...newPlant, photo_url: photoUrl });
       }
       toast.success('Photo uploaded successfully!');
+    }
+  };
+
+  const removePreview = (isEdit = false) => {
+    if (isEdit) {
+      if (editPreviewUrl) URL.revokeObjectURL(editPreviewUrl);
+      setEditPreviewUrl(null);
+      if (editingPlant) setEditingPlant({ ...editingPlant, photo_url: null });
+    } else {
+      if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
+      setNewPreviewUrl(null);
+      setNewPlant({ ...newPlant, photo_url: null });
     }
   };
 
@@ -224,8 +245,10 @@ export default function LaveenGardenTracker() {
     else {
       await logActivity('Plant Added', newPlant.name);
       toast.success('Plant added successfully! 🌱');
+      if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
       setIsAddModalOpen(false);
       setNewPlant({ name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon', watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0], notes: '', location_in_garden: '', photo_url: null });
+      setNewPreviewUrl(null);
       fetchPlants();
       fetchActivities();
     }
@@ -240,8 +263,10 @@ export default function LaveenGardenTracker() {
     else {
       await logActivity('Plant Edited', editingPlant.name);
       toast.success('Plant updated successfully!');
+      if (editPreviewUrl) URL.revokeObjectURL(editPreviewUrl);
       setIsEditModalOpen(false);
       setEditingPlant(null);
+      setEditPreviewUrl(null);
       fetchPlants();
       fetchActivities();
     }
@@ -378,11 +403,26 @@ export default function LaveenGardenTracker() {
                   </div>
                   <div>
                     <Label>Plant Photo (optional)</Label>
-                    <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(false)} disabled={isDemoMode || isUploading}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-2 py-6"
+                      onClick={() => triggerFileInput(false)}
+                      disabled={isDemoMode || isUploading}
+                    >
                       {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                       {isUploading ? 'Uploading Photo...' : 'Choose Photo'}
                     </Button>
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e)} className="hidden" />
+
+                    {newPreviewUrl && (
+                      <div className="mt-4 relative">
+                        <img src={newPreviewUrl} alt="Preview" className="w-full max-h-48 object-cover rounded-xl border border-gray-200 dark:border-zinc-700" />
+                        <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={() => removePreview(false)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode || isUploading}>
                     {isUploading ? 'Uploading Photo...' : 'Add to Garden'}
@@ -414,11 +454,17 @@ export default function LaveenGardenTracker() {
             const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
             return (
               <Card key={plant.id} className="bg-white dark:bg-zinc-900 border border-[#e5e2dd] dark:border-zinc-800 rounded-3xl overflow-hidden">
-                {plant.photo_url && <div className="h-52 bg-gray-100 dark:bg-zinc-800"><img src={plant.photo_url} alt={plant.name} className="w-full h-full object-cover" /></div>}
+                {plant.photo_url && (
+                  <div className="h-52 bg-gray-100 dark:bg-zinc-800">
+                    <img src={plant.photo_url} alt={plant.name} className="w-full h-full object-cover" />
+                  </div>
+                )}
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-xl">{plant.name}</CardTitle>
-                    <Badge className="bg-[#f0ede8] dark:bg-zinc-800 text-[#404940] dark:text-zinc-300">{plant.container_type} • {plant.pot_size}</Badge>
+                    <Badge className="bg-[#f0ede8] dark:bg-zinc-800 text-[#404940] dark:text-zinc-300">
+                      {plant.container_type} • {plant.pot_size}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -518,11 +564,26 @@ export default function LaveenGardenTracker() {
               </div>
               <div>
                 <Label>Update Photo</Label>
-                <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(true)} disabled={isDemoMode || isUploading}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full flex items-center justify-center gap-2 py-6"
+                  onClick={() => triggerFileInput(true)}
+                  disabled={isDemoMode || isUploading}
+                >
                   {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                   {isUploading ? 'Uploading Photo...' : 'Choose New Photo'}
                 </Button>
                 <input ref={editFileInputRef} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, true)} className="hidden" />
+
+                {editPreviewUrl && (
+                  <div className="mt-4 relative">
+                    <img src={editPreviewUrl} alt="Preview" className="w-full max-h-48 object-cover rounded-xl border border-gray-200 dark:border-zinc-700" />
+                    <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={() => removePreview(true)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
               <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode || isUploading}>
                 {isUploading ? 'Uploading Photo...' : 'Save Changes'}
