@@ -52,7 +52,6 @@ export default function LaveenGardenTracker() {
 
     if (error) {
       toast.error('Failed to load plants');
-      console.error(error);
     } else {
       setPlants(data || []);
     }
@@ -66,10 +65,9 @@ export default function LaveenGardenTracker() {
   const addPlant = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from('plants').insert([newPlant]);
-
     if (error) toast.error('Failed to add plant');
     else {
-      toast.success('Plant added successfully! 🌱');
+      toast.success('Plant added! 🌱');
       setIsAddModalOpen(false);
       resetNewPlantForm();
       fetchPlants();
@@ -79,15 +77,13 @@ export default function LaveenGardenTracker() {
   const updatePlant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPlant) return;
-
     const { error } = await supabase
       .from('plants')
       .update(editingPlant)
       .eq('id', editingPlant.id);
-
     if (error) toast.error('Failed to update');
     else {
-      toast.success('Plant updated!');
+      toast.success('Updated successfully');
       setIsEditModalOpen(false);
       setEditingPlant(null);
       fetchPlants();
@@ -96,7 +92,6 @@ export default function LaveenGardenTracker() {
 
   const deletePlant = async (id: string, name: string) => {
     if (!confirm(`Delete ${name}?`)) return;
-
     const { error } = await supabase.from('plants').delete().eq('id', id);
     if (error) toast.error('Failed to delete');
     else {
@@ -111,8 +106,7 @@ export default function LaveenGardenTracker() {
       .from('plants')
       .update({ last_watered: today })
       .eq('id', id);
-
-    if (error) toast.error('Failed to mark watered');
+    if (error) toast.error('Failed');
     else {
       toast.success(`✅ ${name} watered today!`);
       fetchPlants();
@@ -120,7 +114,7 @@ export default function LaveenGardenTracker() {
   };
 
   const openEditModal = (plant: Plant) => {
-    setEditingPlant({ ...plant });
+    setEditingPlant({...plant});
     setIsEditModalOpen(true);
   };
 
@@ -132,49 +126,35 @@ export default function LaveenGardenTracker() {
     });
   };
 
-  const getDaysSinceWatered = (lastWatered: string | null) => {
-    if (!lastWatered) return 'Never';
-    const days = differenceInDays(new Date(), new Date(lastWatered));
-    return `${days} day${days !== 1 ? 's' : ''} ago`;
-  };
-
-  const isDueSoon = (lastWatered: string | null, frequency: number) => {
-    if (!lastWatered) return true;
-    const nextDue = addDays(new Date(lastWatered), frequency);
-    return differenceInDays(nextDue, new Date()) <= 2;
-  };
-
-  if (loading) return <div className="flex justify-center items-center h-screen">Loading your Laveen garden... 🌵</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center">Loading your Laveen garden... 🌵</div>;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-amber-50 to-orange-50 p-6">
       <Toaster position="top-center" richColors />
 
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-10">
+        <div className="mb-10 flex justify-between items-center">
           <div>
             <h1 className="text-5xl font-bold text-emerald-950">🌵 Laveen Garden Tracker</h1>
-            <p className="text-emerald-700 mt-2">Pots & Grow Bags • Desert Watering</p>
+            <p className="text-emerald-700">Pots • Grow Bags • Desert Watering</p>
           </div>
-
           <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
             <DialogTrigger asChild>
               <Button size="lg" className="bg-emerald-700 hover:bg-emerald-800">
-                <Plus className="mr-2" /> Add New Plant
+                <Plus className="mr-2 h-5 w-5" /> Add Plant
               </Button>
             </DialogTrigger>
-            {/* Add modal form - same as before */}
             <DialogContent className="sm:max-w-md">
               <DialogHeader><DialogTitle>Add New Plant</DialogTitle></DialogHeader>
               <form onSubmit={addPlant} className="space-y-4">
                 <div>
                   <Label>Plant Name *</Label>
-                  <Input required value={newPlant.name} onChange={(e) => setNewPlant({...newPlant, name: e.target.value})} />
+                  <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Container Type</Label>
-                    <Select value={newPlant.container_type} onValueChange={(v) => setNewPlant({...newPlant, container_type: v})}>
+                    <Label>Container</Label>
+                    <Select value={newPlant.container_type} onValueChange={(v) => setNewPlant({ ...newPlant, container_type: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Pot">Pot</SelectItem>
@@ -185,14 +165,14 @@ export default function LaveenGardenTracker() {
                   </div>
                   <div>
                     <Label>Size *</Label>
-                    <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({...newPlant, pot_size: e.target.value})} placeholder="5 gal" />
+                    <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })} />
                   </div>
                 </div>
                 <div>
                   <Label>Water every (days) *</Label>
-                  <Input type="number" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({...newPlant, watering_frequency_days: parseInt(e.target.value)})} />
+                  <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
                 </div>
-                <Button type="submit" className="w-full">Add Plant</Button>
+                <Button type="submit" className="w-full">Add to Garden</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -200,24 +180,23 @@ export default function LaveenGardenTracker() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {plants.map((plant) => {
-            const dueSoon = isDueSoon(plant.last_watered, plant.watering_frequency_days);
+            const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
             return (
               <Card key={plant.id} className={`border-2 ${dueSoon ? 'border-orange-500' : 'border-emerald-100'}`}>
                 <CardHeader>
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between">
                     <CardTitle>{plant.name}</CardTitle>
                     <Badge>{plant.container_type} • {plant.pot_size}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-sm">
+                  <div className="text-sm space-y-1">
                     <p>Last watered: {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'}</p>
-                    <p className={dueSoon ? 'text-orange-600 font-medium' : ''}>
-                      Next due: {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : '—'}
+                    <p className={dueSoon ? "text-orange-600 font-medium" : ""}>
+                      Next: {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : '—'}
                     </p>
                   </div>
-
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pt-2">
                     <Button onClick={() => markWatered(plant.id, plant.name)} className="flex-1 bg-emerald-700">
                       <Droplet className="mr-2 h-4 w-4" /> Watered Today
                     </Button>
@@ -235,15 +214,15 @@ export default function LaveenGardenTracker() {
         </div>
       </div>
 
-      {/* Edit Modal - simplified for now */}
+      {/* Simple Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit Plant</DialogTitle></DialogHeader>
           {editingPlant && (
             <form onSubmit={updatePlant} className="space-y-4">
-              <Input value={editingPlant.name} onChange={(e) => setEditingPlant({...editingPlant, name: e.target.value})} />
-              <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({...editingPlant, pot_size: e.target.value})} />
-              <Button type="submit">Save Changes</Button>
+              <Input value={editingPlant.name} onChange={(e) => setEditingPlant({...editingPlant, name: e.target.value})} placeholder="Name" />
+              <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({...editingPlant, pot_size: e.target.value})} placeholder="Size" />
+              <Button type="submit" className="w-full">Save Changes</Button>
             </form>
           )}
         </DialogContent>
