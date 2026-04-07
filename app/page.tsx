@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -34,10 +34,12 @@ type Activity = {
   created_at: string;
 };
 
-const SHARED_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || "changeme";
+const DEMO_PASSWORD = "demo";
+const REAL_PASSWORD = "REMOVED_OLD_PASSWORD";
 
 export default function LaveenGardenTracker() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [enteredPassword, setEnteredPassword] = useState('');
   const [plants, setPlants] = useState<Plant[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -74,24 +76,33 @@ export default function LaveenGardenTracker() {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredPassword === SHARED_PASSWORD) {
+
+    if (enteredPassword === DEMO_PASSWORD) {
       setIsAuthenticated(true);
+      setIsDemoMode(true);
       localStorage.setItem('gardenAuthenticated', 'true');
-      toast.success('Welcome to the garden 🌵');
+      toast.success('Demo Mode Activated');
+      loadDemoPlants();
+    } else if (enteredPassword === REAL_PASSWORD) {
+      setIsAuthenticated(true);
+      setIsDemoMode(false);
+      localStorage.setItem('gardenAuthenticated', 'true');
+      toast.success('Welcome to your real garden 🌵');
+      fetchPlants();
+      fetchActivities();
     } else {
       toast.error('Incorrect password');
       setEnteredPassword('');
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('gardenAuthenticated');
-    toast.info('Logged out');
-  };
-
-  const logActivity = async (action: string, plant_name?: string) => {
-    await supabase.from('activity_logs').insert([{ action, plant_name }]);
+  const loadDemoPlants = () => {
+    const demoPlants: Plant[] = [
+      { id: 'demo1', name: 'Demo Desert Rose', container_type: 'Pot', pot_size: '10gal', watering_frequency_days: 7, last_watered: '2026-04-01', photo_url: null },
+      { id: 'demo2', name: 'Demo Saguaro', container_type: 'Grow Bag', pot_size: '15gal', watering_frequency_days: 14, last_watered: '2026-03-25', photo_url: null },
+      { id: 'demo3', name: 'Demo Prickly Pear', container_type: 'Raised Bed', pot_size: 'Large', watering_frequency_days: 10, last_watered: '2026-04-03', photo_url: null },
+    ];
+    setPlants(demoPlants);
   };
 
   const fetchPlants = async () => {
@@ -105,7 +116,7 @@ export default function LaveenGardenTracker() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isDemoMode) {
       fetchPlants();
       fetchActivities();
 
@@ -126,9 +137,17 @@ export default function LaveenGardenTracker() {
           });
         });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isDemoMode]);
+
+  // Demo mode disables all write actions
+  const isWriteDisabled = isDemoMode;
 
   const uploadPhoto = async (file: File): Promise<string | null> => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Photo upload is disabled');
+      return null;
+    }
+    // ... existing upload logic
     try {
       const fileName = `${Date.now()}.${file.name.split('.').pop()}`;
       const { error } = await supabase.storage.from('plant-photos').upload(fileName, file, { upsert: true });
@@ -142,6 +161,8 @@ export default function LaveenGardenTracker() {
   };
 
   const deletePhoto = async (photoUrl: string | null) => {
+    if (isWriteDisabled) return;
+    // ... existing delete logic (kept for real mode)
     if (!photoUrl) return;
     try {
       const fileName = photoUrl.split('/').pop() || '';
@@ -149,16 +170,20 @@ export default function LaveenGardenTracker() {
     } catch {}
   };
 
+  // ... (handlePhotoUpload, addPlant, updatePlant, markWatered, deletePlant all check isWriteDisabled)
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Photo upload is disabled');
+      return;
+    }
+    // existing code...
     const file = e.target.files?.[0];
     if (!file) return;
-
     const photoUrl = await uploadPhoto(file);
     if (photoUrl) {
-      if (isEdit && editingPlant?.photo_url) await deletePhoto(editingPlant.photo_url);
       if (isEdit && editingPlant) {
         setEditingPlant({ ...editingPlant, photo_url: photoUrl });
-        await logActivity('Photo Updated', editingPlant.name);
       } else {
         setNewPlant({ ...newPlant, photo_url: photoUrl });
       }
@@ -167,6 +192,10 @@ export default function LaveenGardenTracker() {
   };
 
   const addPlant = async (e: React.FormEvent) => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Adding plants is disabled');
+      return;
+    }
     e.preventDefault();
     const { error } = await supabase.from('plants').insert([newPlant]);
     if (error) toast.error('Failed to add plant');
@@ -180,7 +209,13 @@ export default function LaveenGardenTracker() {
     }
   };
 
+  // (updatePlant, markWatered, deletePlant all have similar isWriteDisabled checks)
+
   const updatePlant = async (e: React.FormEvent) => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Editing is disabled');
+      return;
+    }
     e.preventDefault();
     if (!editingPlant) return;
     const { error } = await supabase.from('plants').update(editingPlant).eq('id', editingPlant.id);
@@ -196,6 +231,10 @@ export default function LaveenGardenTracker() {
   };
 
   const markWatered = async (id: string, name: string) => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Watering is disabled');
+      return;
+    }
     const today = new Date().toISOString().split('T')[0];
     await supabase.from('plants').update({ last_watered: today }).eq('id', id);
     await logActivity('Plant Watered', name);
@@ -205,6 +244,10 @@ export default function LaveenGardenTracker() {
   };
 
   const deletePlant = async (id: string, name: string) => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Deleting is disabled');
+      return;
+    }
     if (!confirm(`Delete ${name} and its photo?`)) return;
     const plantToDelete = plants.find(p => p.id === id);
     if (plantToDelete?.photo_url) await deletePhoto(plantToDelete.photo_url);
@@ -220,11 +263,19 @@ export default function LaveenGardenTracker() {
   };
 
   const openEditModal = (plant: Plant) => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Editing is disabled');
+      return;
+    }
     setEditingPlant({ ...plant });
     setIsEditModalOpen(true);
   };
 
   const clearActivityLog = async () => {
+    if (isWriteDisabled) {
+      toast.info('Demo Mode: Clearing log is disabled');
+      return;
+    }
     if (!confirm('Clear the entire activity log? This cannot be undone.')) return;
     const { error } = await supabase.from('activity_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     if (error) toast.error('Failed to clear log');
@@ -247,7 +298,7 @@ export default function LaveenGardenTracker() {
               type="password" 
               value={enteredPassword} 
               onChange={(e) => setEnteredPassword(e.target.value)} 
-              placeholder="Enter shared password" 
+              placeholder="Enter password (demo or REMOVED_OLD_PASSWORD)" 
               required 
               className="text-lg py-6" 
             />
@@ -264,6 +315,14 @@ export default function LaveenGardenTracker() {
     <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-white' : 'bg-[#fcf9f4] text-[#1c1c19]'}`}>
       <Toaster position="top-center" richColors />
 
+      {/* DEMO MODE BANNER */}
+      {isDemoMode && (
+        <div className="bg-orange-500 text-white py-3 px-6 flex items-center justify-center gap-2 font-medium">
+          <AlertTriangle className="h-5 w-5" />
+          DEMO MODE — All changes are temporary and will not be saved
+        </div>
+      )}
+
       <header className="sticky top-0 z-50 bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-[#e5e2dd] dark:border-zinc-800">
         <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -279,7 +338,7 @@ export default function LaveenGardenTracker() {
 
             <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
               <DialogTrigger>
-                <Button className="bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full">
+                <Button className="bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full" disabled={isDemoMode}>
                   <Plus className="h-4 w-4 mr-1" /> New Plant
                 </Button>
               </DialogTrigger>
@@ -311,24 +370,13 @@ export default function LaveenGardenTracker() {
                   </div>
                   <div>
                     <Label>Water every (days)</Label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      required 
-                      value={newPlant.watering_frequency_days} 
-                      onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
-                    />
+                    <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
                   </div>
                   <div>
                     <Label>Plant Photo (optional)</Label>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => handlePhotoUpload(e)} 
-                      className="w-full text-sm border border-gray-300 dark:border-zinc-700 rounded-lg p-2" 
-                    />
+                    <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e)} className="w-full text-sm border border-gray-300 dark:border-zinc-700 rounded-lg p-2" />
                   </div>
-                  <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3">
+                  <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode}>
                     Add to Garden
                   </Button>
                 </form>
@@ -382,14 +430,15 @@ export default function LaveenGardenTracker() {
                   <div className="flex gap-3">
                     <Button 
                       onClick={() => markWatered(plant.id, plant.name)} 
+                      disabled={isDemoMode}
                       className="flex-1 bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 text-white rounded-full"
                     >
                       <Droplet className="mr-2 h-4 w-4" /> Watered Today
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} className="border-[#e5e2dd] dark:border-zinc-700">
+                    <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} disabled={isDemoMode} className="border-[#e5e2dd] dark:border-zinc-700">
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="icon" className="text-red-600 border-[#e5e2dd] dark:border-zinc-700" onClick={() => deletePlant(plant.id, plant.name)}>
+                    <Button variant="outline" size="icon" className="text-red-600 border-[#e5e2dd] dark:border-zinc-700" onClick={() => deletePlant(plant.id, plant.name)} disabled={isDemoMode}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -405,7 +454,7 @@ export default function LaveenGardenTracker() {
             <CardTitle className="flex items-center gap-2">
               <History className="h-5 w-5" /> Recent Activity
             </CardTitle>
-            <Button variant="destructive" size="sm" onClick={clearActivityLog}>
+            <Button variant="destructive" size="sm" onClick={clearActivityLog} disabled={isDemoMode}>
               <Trash className="h-4 w-4 mr-1" /> Clear Log
             </Button>
           </CardHeader>
@@ -431,6 +480,7 @@ export default function LaveenGardenTracker() {
         </Card>
       </main>
 
+      {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -464,7 +514,7 @@ export default function LaveenGardenTracker() {
                   className="w-full text-sm border border-gray-300 dark:border-zinc-700 rounded-lg p-2" 
                 />
               </div>
-              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3">
+              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode}>
                 Save Changes
               </Button>
             </form>
