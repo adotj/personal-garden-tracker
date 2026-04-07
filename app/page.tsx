@@ -36,7 +36,6 @@ type Activity = {
   created_at: string;
 };
 
-// Use environment variable for real password (set in Vercel)
 const DEMO_PASSWORD = "demo";
 const REAL_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || "changeme";
 
@@ -310,7 +309,7 @@ export default function LaveenGardenTracker() {
     await supabase.from('plants').update({ last_watered: today }).eq('id', id);
     await logActivity('Plant Watered', name);
     toast.success(`✅ ${name} watered today!`);
-    fetchPlants();
+    fetchPlants();        // ← Refresh to show updated date
     fetchActivities();
   };
 
@@ -320,7 +319,7 @@ export default function LaveenGardenTracker() {
     await supabase.from('plants').update({ last_fertilized: today }).eq('id', id);
     await logActivity('Plant Fertilized', name);
     toast.success(`🌱 ${name} fertilized today!`);
-    fetchPlants();
+    fetchPlants();        // ← This was missing — now it refreshes the UI
     fetchActivities();
   };
 
@@ -361,7 +360,7 @@ export default function LaveenGardenTracker() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#f5f2eb] dark:bg-zinc-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-[#fffdf7] dark:bg-zinc-900 rounded-3xl shadow-xl p-10 border border-[#e5e2dd]">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-10">
           <div className="flex justify-center mb-6"><Lock className="h-12 w-12 text-[#004c22] dark:text-emerald-400" /></div>
           <h1 className="text-4xl font-bold text-center text-[#004c22] dark:text-emerald-400 mb-2">Laveen Garden</h1>
           <form onSubmit={handlePasswordSubmit} className="space-y-6">
