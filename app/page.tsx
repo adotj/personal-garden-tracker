@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout } from 'lucide-react';
-import { format, addDays, differenceInDays } from 'date-fns';
+import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
 type Plant = {
@@ -35,6 +35,48 @@ type Activity = {
   details?: string;
   created_at: string;
 };
+
+function normalizePlantRow(row: Plant): Plant {
+  return {
+    ...row,
+    watering_frequency_days: Number(row.watering_frequency_days) || 7,
+    fertilizer_frequency_days: Number(row.fertilizer_frequency_days) || 30,
+    last_watered: row.last_watered ?? null,
+    last_fertilized: row.last_fertilized ?? null,
+  };
+}
+
+function safeFormatDay(iso: string | null): string {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  return isValid(d) ? format(d, 'MMM d') : 'Never';
+}
+
+function safeFormatDue(iso: string | null, freqDays: number): string {
+  if (!iso || freqDays < 1) return '';
+  const last = new Date(iso);
+  const due = addDays(last, freqDays);
+  if (!isValid(last) || !isValid(due)) return '';
+  return format(due, 'MMM d');
+}
+
+function waterDueSoon(plant: Plant): boolean {
+  if (!plant.last_watered) return true;
+  const freq = plant.watering_frequency_days || 7;
+  const last = new Date(plant.last_watered);
+  const due = addDays(last, freq);
+  if (!isValid(last) || !isValid(due)) return true;
+  return differenceInDays(due, new Date()) <= 2;
+}
+
+function fertDueSoon(plant: Plant): boolean {
+  if (!plant.last_fertilized) return true;
+  const freq = plant.fertilizer_frequency_days || 30;
+  const last = new Date(plant.last_fertilized);
+  const due = addDays(last, freq);
+  if (!isValid(last) || !isValid(due)) return true;
+  return differenceInDays(due, new Date()) <= 7;
+}
 
 const DEMO_PASSWORD = "demo";
 const REAL_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || "changeme";
@@ -119,8 +161,14 @@ export default function LaveenGardenTracker() {
   };
 
   const fetchPlants = async () => {
-    const { data } = await supabase.from('plants').select('*').order('created_at', { ascending: false });
-    setPlants(data || []);
+    const { data, error } = await supabase.from('plants').select('*').order('created_at', { ascending: false });
+    if (error) {
+      console.error(error);
+      toast.error('Could not load plants');
+      setPlants([]);
+      return;
+    }
+    setPlants((data || []).map((row) => normalizePlantRow(row as Plant)));
   };
 
   const fetchActivities = async () => {
@@ -140,13 +188,14 @@ export default function LaveenGardenTracker() {
 
       fetch(url)
         .then(res => res.json())
-        .then(data => {
-          const current = data.current;
+        .then((data) => {
+          const current = data?.current;
+          const daily = data?.daily;
+          if (!current || !daily?.time?.length) return;
+
           let condition = "Sunny";
           if (current.weather_code >= 51) condition = "Rain";
           else if (current.weather_code >= 3) condition = "Cloudy";
-
-          const daily = data.daily;
 
           setWeather({
             temperature: Math.round(current.temperature_2m),
@@ -532,8 +581,8 @@ export default function LaveenGardenTracker() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
           {plants.map((plant) => {
-            const waterDueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
-            const fertDueSoon = !plant.last_fertilized || differenceInDays(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), new Date()) <= 7;
+            const showWaterDue = waterDueSoon(plant);
+            const showFertDue = fertDueSoon(plant);
 
             return (
               <Card key={plant.id} className="bg-[#fffdf7] dark:bg-zinc-900 border border-[#e5e2dd] dark:border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
@@ -552,14 +601,14 @@ export default function LaveenGardenTracker() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="text-sm text-[#404940] dark:text-zinc-400 space-y-1">
-                    <p>Water: {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'} 
-                       <span className={waterDueSoon ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                         → Due {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : ''}
+                    <p>Water: {safeFormatDay(plant.last_watered)} 
+                       <span className={showWaterDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
+                         → Due {safeFormatDue(plant.last_watered, plant.watering_frequency_days)}
                        </span>
                     </p>
-                    <p>Fertilizer: {plant.last_fertilized ? format(new Date(plant.last_fertilized), 'MMM d') : 'Never'} 
-                       <span className={fertDueSoon ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                         → Due {plant.last_fertilized ? format(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), 'MMM d') : ''}
+                    <p>Fertilizer: {safeFormatDay(plant.last_fertilized)} 
+                       <span className={showFertDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
+                         → Due {safeFormatDue(plant.last_fertilized, plant.fertilizer_frequency_days)}
                        </span>
                     </p>
                   </div>
