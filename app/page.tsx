@@ -5,6 +5,11 @@ import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Plus, Droplet, Edit, Trash2 } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
@@ -24,58 +29,122 @@ type Plant = {
 export default function LaveenGardenTracker() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingPlant, setEditingPlant] = useState<Plant | null>(null);
+
+  const [newPlant, setNewPlant] = useState({
+    name: '',
+    species: '',
+    container_type: 'Grow Bag',
+    pot_size: '',
+    watering_frequency_days: 3,
+    last_watered: new Date().toISOString().split('T')[0],
+    notes: '',
+    location_in_garden: '',
+  });
 
   const fetchPlants = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    const { data, error } = await supabase
+      .from('plants')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      const { data, error: supabaseError } = await supabase
-        .from('plants')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (supabaseError) {
-        console.error('Supabase Error:', supabaseError);
-        setError(`Database error: ${supabaseError.message}`);
-        toast.error(`Failed to load plants: ${supabaseError.message}`);
-      } else {
-        console.log('Successfully loaded', data?.length || 0, 'plants');
-        setPlants(data || []);
-      }
-    } catch (err: any) {
-      console.error('Unexpected error:', err);
-      setError(err.message || 'Unknown error occurred');
-      toast.error('Unexpected error loading garden');
-    } finally {
-      setLoading(false);
+    if (error) {
+      toast.error('Failed to load plants');
+      console.error(error);
+    } else {
+      setPlants(data || []);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchPlants();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen text-xl bg-gradient-to-br from-emerald-50 to-amber-50">
-        Loading your Laveen garden... 🌵
-      </div>
-    );
-  }
+  const addPlant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.from('plants').insert([newPlant]);
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen p-6 text-center bg-gradient-to-br from-emerald-50 to-amber-50">
-        <p className="text-2xl text-red-600 mb-4">Failed to load garden</p>
-        <p className="text-red-700 mb-8 max-w-md">{error}</p>
-        <Button onClick={fetchPlants} className="bg-emerald-700">
-          Try Again
-        </Button>
-      </div>
-    );
-  }
+    if (error) toast.error('Failed to add plant');
+    else {
+      toast.success('Plant added successfully! 🌱');
+      setIsAddModalOpen(false);
+      resetNewPlantForm();
+      fetchPlants();
+    }
+  };
+
+  const updatePlant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlant) return;
+
+    const { error } = await supabase
+      .from('plants')
+      .update(editingPlant)
+      .eq('id', editingPlant.id);
+
+    if (error) toast.error('Failed to update');
+    else {
+      toast.success('Plant updated!');
+      setIsEditModalOpen(false);
+      setEditingPlant(null);
+      fetchPlants();
+    }
+  };
+
+  const deletePlant = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}?`)) return;
+
+    const { error } = await supabase.from('plants').delete().eq('id', id);
+    if (error) toast.error('Failed to delete');
+    else {
+      toast.success(`${name} deleted`);
+      fetchPlants();
+    }
+  };
+
+  const markWatered = async (id: string, name: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const { error } = await supabase
+      .from('plants')
+      .update({ last_watered: today })
+      .eq('id', id);
+
+    if (error) toast.error('Failed to mark watered');
+    else {
+      toast.success(`✅ ${name} watered today!`);
+      fetchPlants();
+    }
+  };
+
+  const openEditModal = (plant: Plant) => {
+    setEditingPlant({ ...plant });
+    setIsEditModalOpen(true);
+  };
+
+  const resetNewPlantForm = () => {
+    setNewPlant({
+      name: '', species: '', container_type: 'Grow Bag', pot_size: '',
+      watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
+      notes: '', location_in_garden: ''
+    });
+  };
+
+  const getDaysSinceWatered = (lastWatered: string | null) => {
+    if (!lastWatered) return 'Never';
+    const days = differenceInDays(new Date(), new Date(lastWatered));
+    return `${days} day${days !== 1 ? 's' : ''} ago`;
+  };
+
+  const isDueSoon = (lastWatered: string | null, frequency: number) => {
+    if (!lastWatered) return true;
+    const nextDue = addDays(new Date(lastWatered), frequency);
+    return differenceInDays(nextDue, new Date()) <= 2;
+  };
+
+  if (loading) return <div className="flex justify-center items-center h-screen">Loading your Laveen garden... 🌵</div>;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-amber-50 to-orange-50 p-6">
@@ -84,42 +153,101 @@ export default function LaveenGardenTracker() {
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-5xl font-bold text-emerald-950 flex items-center gap-4">
-              🌵 Laveen Garden Tracker
-            </h1>
+            <h1 className="text-5xl font-bold text-emerald-950">🌵 Laveen Garden Tracker</h1>
             <p className="text-emerald-700 mt-2">Pots & Grow Bags • Desert Watering</p>
           </div>
-          <Button size="lg" className="bg-emerald-700 hover:bg-emerald-800">
-            <Plus className="mr-2" /> Add New Plant
-          </Button>
+
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="bg-emerald-700 hover:bg-emerald-800">
+                <Plus className="mr-2" /> Add New Plant
+              </Button>
+            </DialogTrigger>
+            {/* Add modal form - same as before */}
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader><DialogTitle>Add New Plant</DialogTitle></DialogHeader>
+              <form onSubmit={addPlant} className="space-y-4">
+                <div>
+                  <Label>Plant Name *</Label>
+                  <Input required value={newPlant.name} onChange={(e) => setNewPlant({...newPlant, name: e.target.value})} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Container Type</Label>
+                    <Select value={newPlant.container_type} onValueChange={(v) => setNewPlant({...newPlant, container_type: v})}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pot">Pot</SelectItem>
+                        <SelectItem value="Grow Bag">Grow Bag</SelectItem>
+                        <SelectItem value="Raised Bed">Raised Bed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Size *</Label>
+                    <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({...newPlant, pot_size: e.target.value})} placeholder="5 gal" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Water every (days) *</Label>
+                  <Input type="number" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({...newPlant, watering_frequency_days: parseInt(e.target.value)})} />
+                </div>
+                <Button type="submit" className="w-full">Add Plant</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {plants.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-3xl text-emerald-700">Your garden is empty 🌱</p>
-            <p className="mt-4 text-emerald-600">Add your first plant to get started</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {plants.map((plant) => (
-              <Card key={plant.id} className="border-emerald-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {plants.map((plant) => {
+            const dueSoon = isDueSoon(plant.last_watered, plant.watering_frequency_days);
+            return (
+              <Card key={plant.id} className={`border-2 ${dueSoon ? 'border-orange-500' : 'border-emerald-100'}`}>
                 <CardHeader>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-start">
                     <CardTitle>{plant.name}</CardTitle>
                     <Badge>{plant.container_type} • {plant.pot_size}</Badge>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p>Water every {plant.watering_frequency_days} days</p>
-                  <Button className="mt-4 w-full" onClick={() => alert('Watered today! (coming soon)')}>
-                    Watered Today
-                  </Button>
+                <CardContent className="space-y-4">
+                  <div className="text-sm">
+                    <p>Last watered: {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'}</p>
+                    <p className={dueSoon ? 'text-orange-600 font-medium' : ''}>
+                      Next due: {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : '—'}
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button onClick={() => markWatered(plant.id, plant.name)} className="flex-1 bg-emerald-700">
+                      <Droplet className="mr-2 h-4 w-4" /> Watered Today
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => openEditModal(plant)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="text-red-500" onClick={() => deletePlant(plant.id, plant.name)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
+
+      {/* Edit Modal - simplified for now */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Plant</DialogTitle></DialogHeader>
+          {editingPlant && (
+            <form onSubmit={updatePlant} className="space-y-4">
+              <Input value={editingPlant.name} onChange={(e) => setEditingPlant({...editingPlant, name: e.target.value})} />
+              <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({...editingPlant, pot_size: e.target.value})} />
+              <Button type="submit">Save Changes</Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
