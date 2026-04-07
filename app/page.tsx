@@ -315,12 +315,39 @@ export default function LaveenGardenTracker() {
 
   const markFertilized = async (id: string, name: string) => {
     if (isWriteDisabled) return;
-    const today = new Date().toISOString().split('T')[0];
-    await supabase.from('plants').update({ last_fertilized: today }).eq('id', id);
-    await logActivity('Plant Fertilized', name);
+
+    const { data: logRow, error: logError } = await supabase
+      .from('activity_logs')
+      .insert([{ action: 'Plant Fertilized', plant_name: name }])
+      .select('id, created_at')
+      .single();
+
+    if (logError || !logRow?.created_at) {
+      toast.error(logError?.message ?? 'Failed to record fertilizing');
+      return;
+    }
+
+    const fertilizedDate = format(new Date(logRow.created_at), 'yyyy-MM-dd');
+
+    const { data: updated, error: plantError } = await supabase
+      .from('plants')
+      .update({ last_fertilized: fertilizedDate })
+      .eq('id', id)
+      .select('id');
+
+    if (plantError || !updated?.length) {
+      await supabase.from('activity_logs').delete().eq('id', logRow.id);
+      toast.error(plantError?.message ?? 'Plant fertilizer date did not save — check the plants table has last_fertilized and RLS allows updates.');
+      await fetchActivities();
+      return;
+    }
+
     toast.success(`🌱 ${name} fertilized today!`);
-    fetchPlants();        // ← This was missing — now it refreshes the UI
-    fetchActivities();
+    setPlants((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, last_fertilized: fertilizedDate } : p)),
+    );
+    await fetchPlants();
+    await fetchActivities();
   };
 
   const deletePlant = async (id: string, name: string) => {
