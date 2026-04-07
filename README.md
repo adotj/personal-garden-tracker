@@ -2,7 +2,6 @@
 
 A full-stack web app to track plants, watering schedules, photos, and activity in my desert garden (Laveen, AZ).
 
-**Live Demo:** [https://laveen-garden-tracker.vercel.app](https://laveen-garden-tracker.vercel.app)  
 **GitHub:** [github.com/adotj/laveen-garden-tracker](https://github.com/adotj/laveen-garden-tracker)
 
 ### Tech Stack
