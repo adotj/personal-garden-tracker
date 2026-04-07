@@ -14,22 +14,24 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Shared password protection for me and my girlfriend
 
 ### What I Learned
-- Building and deploying a full-stack Next.js app
-- Working with Supabase (database, authentication, file storage)
-- Handling file uploads and automatic cleanup
-- Responsive design with Tailwind CSS
-- Git + Vercel deployment workflow
+- Building and deploying a full-stack Next.js application from scratch
+- Working with Supabase for database management, file storage, and Row Level Security
+- Handling file uploads and automatic photo cleanup
+- Implementing secure shared password protection using environment variables (instead of hardcoding credentials)
+- Using `git-filter-repo` to rewrite Git history and completely remove exposed credentials from all previous commits
+- Responsive design and modern UI development with Tailwind CSS and shadcn/ui
+- Git workflow, Vercel deployment, and proper management of secrets
 
-- ## Screenshots
+### Screenshots
 
-![Main Dashboard](screenshots/dashboard.png)
-**Main dashboard with plants, weather, and activity log**
+![Main Dashboard](screenshots/dashboard.png)  
+**Main dashboard with plants, weather widget, and activity log**
 
-![Add New Plant](screenshots/add-plant.png)
+![Add New Plant](screenshots/add-plant.png)  
 **Adding a new plant with photo upload**
 
-![Activity Log](screenshots/activity-log.png)
+![Activity Log](screenshots/activity-log.png)  
 **Recent activity log**
 
-![Dark Mode](screenshots/dark-mode.png)
-**Dark mode toggle**
+![Dark Mode](screenshots/dark-mode.png)  
+**Dark mode view**
