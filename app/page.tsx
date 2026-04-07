@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -56,6 +56,9 @@ export default function LaveenGardenTracker() {
     watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
     notes: '', location_in_garden: '', photo_url: null as string | null,
   });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // Load preferences
   useEffect(() => {
@@ -179,10 +182,7 @@ export default function LaveenGardenTracker() {
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
-    if (isWriteDisabled) {
-      toast.info('Demo Mode: Photo upload is disabled');
-      return;
-    }
+    if (isWriteDisabled) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -195,6 +195,14 @@ export default function LaveenGardenTracker() {
         setNewPlant({ ...newPlant, photo_url: photoUrl });
       }
       toast.success('Photo uploaded successfully!');
+    }
+  };
+
+  const triggerFileInput = (isEdit: boolean) => {
+    if (isEdit && editFileInputRef.current) {
+      editFileInputRef.current.click();
+    } else if (fileInputRef.current) {
+      fileInputRef.current.click();
     }
   };
 
@@ -384,11 +392,22 @@ export default function LaveenGardenTracker() {
                   </div>
                   <div>
                     <Label>Plant Photo (optional)</Label>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => handlePhotoUpload(e)} 
-                      className="w-full text-sm border border-gray-300 dark:border-zinc-700 rounded-lg p-2" 
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-2 py-6"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isDemoMode}
+                    >
+                      <Image className="h-5 w-5" />
+                      Choose Photo
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePhotoUpload(e)}
+                      className="hidden"
                     />
                   </div>
                   <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode}>
@@ -521,11 +540,22 @@ export default function LaveenGardenTracker() {
               </div>
               <div>
                 <Label>Update Photo</Label>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={(e) => handlePhotoUpload(e, true)} 
-                  className="w-full text-sm border border-gray-300 dark:border-zinc-700 rounded-lg p-2" 
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full flex items-center justify-center gap-2 py-6"
+                  onClick={() => editFileInputRef.current?.click()}
+                  disabled={isDemoMode}
+                >
+                  <Image className="h-5 w-5" />
+                  Choose New Photo
+                </Button>
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handlePhotoUpload(e, true)}
+                  className="hidden"
                 />
               </div>
               <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode}>
