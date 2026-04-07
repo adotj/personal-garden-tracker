@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import type { Plant } from '@/lib/plant-types';
@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout } from 'lucide-react';
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
+import { cn } from '@/lib/utils';
 
 type Activity = {
   id: string;
@@ -71,6 +73,24 @@ function fertDueSoon(plant: Plant): boolean {
   const due = addDays(last, freq);
   if (!isValid(last) || !isValid(due)) return true;
   return differenceInDays(due, new Date()) <= 7;
+}
+
+function getWeatherCondition(code: number): string {
+  if (code === 0) return 'Sunny';
+  if (code <= 3) return 'Cloudy';
+  if (code <= 48) return 'Fog';
+  if (code <= 67 || code <= 82) return 'Rain';
+  if (code <= 86) return 'Snow';
+  return 'Cloudy';
+}
+
+function getWeatherIcon(code: number): string {
+  if (code === 0) return '☀️';
+  if (code <= 3) return '⛅';
+  if (code <= 48) return '🌫️';
+  if (code <= 67 || code <= 82) return '🌧️';
+  if (code <= 86) return '❄️';
+  return '☁️';
 }
 
 const DEMO_PASSWORD = "demo";
@@ -185,61 +205,61 @@ export default function LaveenGardenTracker() {
     setActivities(data || []);
   };
 
+  const loadWeather = useCallback(async () => {
+    const url =
+      'https://api.open-meteo.com/v1/forecast?latitude=33.3625&longitude=-112.1695' +
+      '&current=temperature_2m,wind_speed_10m,weather_code' +
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
+      '&temperature_unit=fahrenheit&timezone=America/Phoenix';
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      const current = data?.current;
+      const daily = data?.daily;
+      if (!current || !daily?.time?.length) return;
+
+      let condition = 'Sunny';
+      if (current.weather_code >= 51) condition = 'Rain';
+      else if (current.weather_code >= 3) condition = 'Cloudy';
+
+      setWeather({
+        temperature: Math.round(current.temperature_2m),
+        condition,
+        windSpeed: Math.round(current.wind_speed_10m),
+        forecast: daily.time.slice(0, 3).map((date: string, i: number) => ({
+          date: format(new Date(date), 'EEE'),
+          high: Math.round(daily.temperature_2m_max[i]),
+          low: Math.round(daily.temperature_2m_min[i]),
+          condition: getWeatherCondition(daily.weather_code[i]),
+          icon: getWeatherIcon(daily.weather_code[i]),
+        })),
+      });
+    } catch {
+      console.error('Weather fetch failed');
+    }
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated && !isDemoMode) {
       fetchPlants();
       fetchActivities();
-
-      const url = 'https://api.open-meteo.com/v1/forecast?latitude=33.3625&longitude=-112.1695' +
-        '&current=temperature_2m,wind_speed_10m,weather_code' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
-        '&temperature_unit=fahrenheit&timezone=America/Phoenix';
-
-      fetch(url)
-        .then(res => res.json())
-        .then((data) => {
-          const current = data?.current;
-          const daily = data?.daily;
-          if (!current || !daily?.time?.length) return;
-
-          let condition = "Sunny";
-          if (current.weather_code >= 51) condition = "Rain";
-          else if (current.weather_code >= 3) condition = "Cloudy";
-
-          setWeather({
-            temperature: Math.round(current.temperature_2m),
-            condition,
-            windSpeed: Math.round(current.wind_speed_10m),
-            forecast: daily.time.slice(0, 3).map((date: string, i: number) => ({
-              date: format(new Date(date), 'EEE'),
-              high: Math.round(daily.temperature_2m_max[i]),
-              low: Math.round(daily.temperature_2m_min[i]),
-              condition: getWeatherCondition(daily.weather_code[i]),
-              icon: getWeatherIcon(daily.weather_code[i]),
-            })),
-          });
-        })
-        .catch(() => console.error('Weather fetch failed'));
+      void loadWeather();
     }
-  }, [isAuthenticated, isDemoMode]);
+  }, [isAuthenticated, isDemoMode, loadWeather]);
 
-  const getWeatherCondition = (code: number): string => {
-    if (code === 0) return "Sunny";
-    if (code <= 3) return "Cloudy";
-    if (code <= 48) return "Fog";
-    if (code <= 67 || code <= 82) return "Rain";
-    if (code <= 86) return "Snow";
-    return "Cloudy";
-  };
+  const refreshGarden = useCallback(async () => {
+    if (isDemoMode) {
+      loadDemoPlants();
+      return;
+    }
+    await fetchPlants();
+    await fetchActivities();
+    await loadWeather();
+  }, [isDemoMode, loadWeather]);
 
-  const getWeatherIcon = (code: number): string => {
-    if (code === 0) return "☀️";
-    if (code <= 3) return "⛅";
-    if (code <= 48) return "🌫️";
-    if (code <= 67 || code <= 82) return "🌧️";
-    if (code <= 86) return "❄️";
-    return "☁️";
-  };
+  const { pullDistance, isRefreshing, threshold } = usePullToRefresh(refreshGarden, {
+    disabled: !isAuthenticated || loading,
+  });
 
   const isWriteDisabled = isDemoMode;
 
@@ -488,6 +508,26 @@ export default function LaveenGardenTracker() {
   return (
     <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-white' : 'bg-desert-page text-desert-ink'}`}>
       <Toaster position="top-center" richColors />
+
+      {isAuthenticated && !loading && (pullDistance > 0 || isRefreshing) && (
+        <div
+          className="pointer-events-none fixed left-0 right-0 z-[60] flex justify-center pt-[max(0.5rem,env(safe-area-inset-top))]"
+          aria-hidden
+        >
+          <div
+            className={cn(
+              'flex h-10 w-10 items-center justify-center rounded-full bg-desert-parchment/95 shadow-md ring-1 ring-desert-border dark:bg-zinc-900/95 dark:ring-zinc-700',
+              isRefreshing && 'ring-oasis/30',
+            )}
+            style={{
+              transform: `translateY(${isRefreshing ? 0 : Math.min(pullDistance * 0.4, 52)}px)`,
+              opacity: isRefreshing ? 1 : Math.min(pullDistance / threshold, 1),
+            }}
+          >
+            <Loader2 className={cn('h-5 w-5 text-oasis', isRefreshing && 'animate-spin')} />
+          </div>
+        </div>
+      )}
 
       {isDemoMode && (
         <div className="bg-amber-950/90 text-amber-100 py-3 px-6 flex items-center justify-center gap-2 font-medium border-b border-amber-900/50">

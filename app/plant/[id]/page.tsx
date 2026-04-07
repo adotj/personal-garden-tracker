@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { ArrowLeft, Image as ImageIcon, Loader2, Moon, Sun as SunIcon } from 'lucide-react';
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
@@ -227,6 +228,10 @@ export default function PlantProfilePage() {
     toast.success('Homepage photo updated');
   };
 
+  const { pullDistance, isRefreshing, threshold } = usePullToRefresh(async () => load(), {
+    disabled: !id || mode === null || loading,
+  });
+
   if (!id || loading || mode === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-desert-page dark:bg-zinc-950 text-desert-ink dark:text-white">
@@ -257,6 +262,26 @@ export default function PlantProfilePage() {
   return (
     <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-white' : 'bg-desert-page text-desert-ink'}`}>
       <Toaster position="top-center" richColors />
+
+      {(pullDistance > 0 || isRefreshing) && (
+        <div
+          className="pointer-events-none fixed left-0 right-0 z-[60] flex justify-center pt-[max(0.5rem,env(safe-area-inset-top))]"
+          aria-hidden
+        >
+          <div
+            className={cn(
+              'flex h-10 w-10 items-center justify-center rounded-full bg-desert-parchment/95 shadow-md ring-1 ring-desert-border dark:bg-zinc-900/95 dark:ring-zinc-700',
+              isRefreshing && 'ring-oasis/30',
+            )}
+            style={{
+              transform: `translateY(${isRefreshing ? 0 : Math.min(pullDistance * 0.4, 52)}px)`,
+              opacity: isRefreshing ? 1 : Math.min(pullDistance / threshold, 1),
+            }}
+          >
+            <Loader2 className={cn('h-5 w-5 text-oasis', isRefreshing && 'animate-spin')} />
+          </div>
+        </div>
+      )}
 
       <header className="sticky top-0 z-40 border-b border-desert-border bg-desert-parchment/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
         <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 py-4 sm:px-6">
