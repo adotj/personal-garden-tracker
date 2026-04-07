@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Plus, Droplet, Edit, Trash2 } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
@@ -29,6 +30,8 @@ export default function LaveenGardenTracker() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingPlant, setEditingPlant] = useState<Plant | null>(null);
 
   const [newPlant, setNewPlant] = useState({
     name: '',
@@ -47,12 +50,8 @@ export default function LaveenGardenTracker() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      toast.error('Failed to load plants');
-      console.error(error);
-    } else {
-      setPlants(data || []);
-    }
+    if (error) toast.error('Failed to load plants');
+    else setPlants(data || []);
     setLoading(false);
   };
 
@@ -76,6 +75,24 @@ export default function LaveenGardenTracker() {
     }
   };
 
+  const updatePlant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlant) return;
+
+    const { error } = await supabase
+      .from('plants')
+      .update(editingPlant)
+      .eq('id', editingPlant.id);
+
+    if (error) toast.error('Failed to update plant');
+    else {
+      toast.success('Plant updated successfully!');
+      setIsEditModalOpen(false);
+      setEditingPlant(null);
+      fetchPlants();
+    }
+  };
+
   const markWatered = async (id: string, name: string) => {
     const today = new Date().toISOString().split('T')[0];
     await supabase.from('plants').update({ last_watered: today }).eq('id', id);
@@ -90,12 +107,13 @@ export default function LaveenGardenTracker() {
     fetchPlants();
   };
 
+  const openEditModal = (plant: Plant) => {
+    setEditingPlant({ ...plant });
+    setIsEditModalOpen(true);
+  };
+
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center text-xl bg-gradient-to-br from-emerald-50 to-amber-50">
-        Loading your Laveen garden... 🌵
-      </div>
-    );
+    return <div className="flex h-screen items-center justify-center text-xl">Loading your Laveen garden... 🌵</div>;
   }
 
   return (
@@ -122,23 +140,14 @@ export default function LaveenGardenTracker() {
               <form onSubmit={addPlant} className="space-y-4">
                 <div>
                   <Label>Plant Name *</Label>
-                  <Input 
-                    required 
-                    value={newPlant.name} 
-                    onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} 
-                  />
+                  <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Container Type</Label>
-                    <Select 
-                      value={newPlant.container_type} 
-                      onValueChange={(v) => setNewPlant({ ...newPlant, container_type: v || 'Grow Bag' })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Select value={newPlant.container_type} onValueChange={(v) => setNewPlant({ ...newPlant, container_type: v || 'Grow Bag' })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Pot">Pot</SelectItem>
                         <SelectItem value="Grow Bag">Grow Bag</SelectItem>
@@ -148,11 +157,7 @@ export default function LaveenGardenTracker() {
                   </div>
                   <div>
                     <Label>Size *</Label>
-                    <Input 
-                      required 
-                      value={newPlant.pot_size} 
-                      onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })} 
-                    />
+                    <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })} />
                   </div>
                 </div>
 
@@ -194,21 +199,13 @@ export default function LaveenGardenTracker() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      onClick={() => markWatered(plant.id, plant.name)} 
-                      className="flex-1 bg-emerald-700 hover:bg-emerald-800"
-                    >
+                    <Button onClick={() => markWatered(plant.id, plant.name)} className="flex-1 bg-emerald-700">
                       <Droplet className="mr-2 h-4 w-4" /> Watered Today
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => alert('Edit feature coming soon')}>
+                    <Button variant="outline" size="icon" onClick={() => openEditModal(plant)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      className="text-red-500 hover:bg-red-50" 
-                      onClick={() => deletePlant(plant.id, plant.name)}
-                    >
+                    <Button variant="outline" size="icon" className="text-red-500" onClick={() => deletePlant(plant.id, plant.name)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -218,6 +215,39 @@ export default function LaveenGardenTracker() {
           })}
         </div>
       </div>
+
+      {/* Edit Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Plant</DialogTitle>
+          </DialogHeader>
+          {editingPlant && (
+            <form onSubmit={updatePlant} className="space-y-4">
+              <div>
+                <Label>Plant Name *</Label>
+                <Input value={editingPlant.name} onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Size *</Label>
+                <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({ ...editingPlant, pot_size: e.target.value })} />
+              </div>
+              <div>
+                <Label>Water every (days) *</Label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  value={editingPlant.watering_frequency_days} 
+                  onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
+                />
+              </div>
+              <Button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800">
+                Save Changes
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
