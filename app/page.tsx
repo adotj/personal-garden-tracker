@@ -67,30 +67,30 @@ export default function LaveenGardenTracker() {
       const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `plant-photos/${fileName}`;
 
-      console.log('Uploading to path:', filePath);
+      console.log('Attempting upload to:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('plant-photos')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: true
+          upsert: true,
         });
 
       if (uploadError) {
-        console.error('Upload error details:', uploadError);
+        console.error('Upload error:', uploadError);
         toast.error(`Upload failed: ${uploadError.message}`);
         return null;
       }
 
-      const { data } = supabase.storage
+      const { data: urlData } = supabase.storage
         .from('plant-photos')
         .getPublicUrl(filePath);
 
-      console.log('Public URL:', data.publicUrl);
-      return data.publicUrl;
+      console.log('Public URL generated:', urlData.publicUrl);
+      return urlData.publicUrl;
     } catch (err: any) {
-      console.error('Photo upload exception:', err);
-      toast.error('Photo upload failed - check console');
+      console.error('Upload exception:', err);
+      toast.error('Photo upload failed - check browser console');
       return null;
     }
   };
