@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Droplet, Edit, Trash2, Camera } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2 } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -24,7 +24,7 @@ type Plant = {
   last_watered: string | null;
   notes?: string;
   location_in_garden?: string;
-  photo_url?: string;
+  photo_url?: string | null;
 };
 
 export default function LaveenGardenTracker() {
@@ -43,7 +43,7 @@ export default function LaveenGardenTracker() {
     last_watered: new Date().toISOString().split('T')[0],
     notes: '',
     location_in_garden: '',
-    photo_url: '',
+    photo_url: null as string | null,
   });
 
   const fetchPlants = async () => {
@@ -61,26 +61,47 @@ export default function LaveenGardenTracker() {
     fetchPlants();
   }, []);
 
-  // Upload photo and return public URL
   const uploadPhoto = async (file: File): Promise<string | null> => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `public/${fileName}`;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+      const filePath = `plant-photos/${fileName}`;
 
-    const { error } = await supabase.storage
-      .from('plant-photos')
-      .upload(filePath, file, { upsert: true });
+      const { error: uploadError } = await supabase.storage
+        .from('plant-photos')
+        .upload(filePath, file, { upsert: true });
 
-    if (error) {
-      toast.error('Failed to upload photo');
+      if (uploadError) {
+        console.error(uploadError);
+        toast.error('Upload failed');
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('plant-photos')
+        .getPublicUrl(filePath);
+
+      return urlData.publicUrl;
+    } catch (err) {
+      console.error(err);
+      toast.error('Photo upload failed');
       return null;
     }
+  };
 
-    const { data } = supabase.storage
-      .from('plant-photos')
-      .getPublicUrl(filePath);
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    return data.publicUrl;
+    const photoUrl = await uploadPhoto(file);
+    if (photoUrl) {
+      if (isEdit && editingPlant) {
+        setEditingPlant({ ...editingPlant, photo_url: photoUrl });
+      } else {
+        setNewPlant({ ...newPlant, photo_url: photoUrl });
+      }
+      toast.success('Photo uploaded successfully!');
+    }
   };
 
   const addPlant = async (e: React.FormEvent) => {
@@ -93,7 +114,7 @@ export default function LaveenGardenTracker() {
       setNewPlant({
         name: '', species: '', container_type: 'Grow Bag', pot_size: '',
         watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
-        notes: '', location_in_garden: '', photo_url: ''
+        notes: '', location_in_garden: '', photo_url: null
       });
       fetchPlants();
     }
@@ -136,22 +157,6 @@ export default function LaveenGardenTracker() {
     setIsEditModalOpen(true);
   };
 
-  // Handle photo upload in Add or Edit
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const photoUrl = await uploadPhoto(file);
-    if (photoUrl) {
-      if (isEdit && editingPlant) {
-        setEditingPlant({ ...editingPlant, photo_url: photoUrl });
-      } else {
-        setNewPlant({ ...newPlant, photo_url: photoUrl });
-      }
-      toast.success('Photo uploaded!');
-    }
-  };
-
   if (loading) {
     return <div className="flex h-screen items-center justify-center text-xl bg-[#fcf9f4]">Loading your Laveen garden... 🌵</div>;
   }
@@ -160,7 +165,6 @@ export default function LaveenGardenTracker() {
     <div className="min-h-screen bg-[#fcf9f4] text-[#1c1c19]">
       <Toaster position="top-center" richColors />
 
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-[#fcf9f4] border-b border-[#e5e2dd]">
         <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -214,16 +218,15 @@ export default function LaveenGardenTracker() {
                   />
                 </div>
 
-                {/* Photo Upload */}
                 <div>
-                  <Label>Plant Photo</Label>
+                  <Label>Plant Photo (optional)</Label>
                   <input 
                     type="file" 
                     accept="image/*" 
                     onChange={(e) => handlePhotoUpload(e)} 
-                    className="w-full text-sm"
+                    className="w-full text-sm border border-gray-300 rounded-lg p-2"
                   />
-                  {newPlant.photo_url && <p className="text-xs text-green-600 mt-1">Photo uploaded ✓</p>}
+                  {newPlant.photo_url && <p className="text-xs text-green-600 mt-1">Photo ready ✓</p>}
                 </div>
 
                 <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
@@ -236,25 +239,13 @@ export default function LaveenGardenTracker() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <div className="mb-12">
-          <div className="flex items-baseline gap-4">
-            <h1 className="text-5xl font-bold text-[#004c22] tracking-tight">
-              Good morning, Laveen.
-            </h1>
-            <span className="text-2xl text-[#707a6f]">
-              {new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-            </span>
-          </div>
-        </div>
-
-        {/* Plant Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {plants.map((plant) => {
             const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
             return (
               <Card key={plant.id} className="bg-white border border-[#e5e2dd] shadow-sm hover:shadow transition-all rounded-3xl overflow-hidden">
                 {plant.photo_url && (
-                  <div className="h-48 bg-gray-100">
+                  <div className="h-52 bg-gray-100">
                     <img 
                       src={plant.photo_url} 
                       alt={plant.name}
@@ -297,7 +288,7 @@ export default function LaveenGardenTracker() {
         </div>
       </main>
 
-      {/* Edit Modal - with photo upload */}
+      {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -323,16 +314,14 @@ export default function LaveenGardenTracker() {
                 />
               </div>
 
-              {/* Photo Upload in Edit */}
               <div>
                 <Label>Update Photo</Label>
                 <input 
                   type="file" 
                   accept="image/*" 
                   onChange={(e) => handlePhotoUpload(e, true)} 
-                  className="w-full text-sm"
+                  className="w-full text-sm border border-gray-300 rounded-lg p-2"
                 />
-                {editingPlant.photo_url && <p className="text-xs text-green-600 mt-1">Current photo exists ✓</p>}
               </div>
 
               <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
