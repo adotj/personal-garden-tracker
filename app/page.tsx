@@ -65,9 +65,9 @@ export default function LaveenGardenTracker() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `plant-photos/${fileName}`;
+      const filePath = fileName;   // ← Fixed: No double "plant-photos/" prefix
 
-      console.log('Attempting upload to:', filePath);
+      console.log('Uploading to path:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('plant-photos')
@@ -86,11 +86,11 @@ export default function LaveenGardenTracker() {
         .from('plant-photos')
         .getPublicUrl(filePath);
 
-      console.log('Public URL generated:', urlData.publicUrl);
+      console.log('Public URL:', urlData.publicUrl);
       return urlData.publicUrl;
     } catch (err: any) {
       console.error('Upload exception:', err);
-      toast.error('Photo upload failed - check browser console');
+      toast.error('Photo upload failed - check console');
       return null;
     }
   };
