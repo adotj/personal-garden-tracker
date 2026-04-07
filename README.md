@@ -32,4 +32,4 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 **Recent activity log**
 
 ![Dark Mode](screenshots/dark-mode.png)
-**Dark mode view**
+**Dark mode toggle**
