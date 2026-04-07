@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
+
+// ─── Color tokens (light mode) ────────────────────────────────────────────────
+// bg-page      : #e4ddd2   warm sand
+// bg-surface   : #ede7db   parchment card
+// bg-header    : #ddd7cb   slightly darker header
+// bg-inset     : #d8d2c5   forecast/badge backgrounds
+// border       : #c9c3b5   muted warm border
+// text-primary : #25241c   near-black warm
+// text-muted   : #6b6559   warm taupe
+// green-primary: #2d5c3e   deep sage green
+// green-hover  : #1a3d29
+// ─────────────────────────────────────────────────────────────────────────────
 
 type Plant = {
   id: string;
@@ -59,9 +70,9 @@ export default function LaveenGardenTracker() {
     fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],
     notes: '', location_in_garden: '', photo_url: null as string | null,
   });
+
   const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
   const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,7 +80,6 @@ export default function LaveenGardenTracker() {
     const savedDark = localStorage.getItem('darkMode') === 'true';
     setDarkMode(savedDark);
     if (savedDark) document.documentElement.classList.add('dark');
-
     if (localStorage.getItem('gardenAuthenticated') === 'true') setIsAuthenticated(true);
     setLoading(false);
   }, []);
@@ -132,12 +142,10 @@ export default function LaveenGardenTracker() {
     if (isAuthenticated && !isDemoMode) {
       fetchPlants();
       fetchActivities();
-
       const url = 'https://api.open-meteo.com/v1/forecast?latitude=33.3625&longitude=-112.1695' +
         '&current=temperature_2m,wind_speed_10m,weather_code' +
         '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
         '&temperature_unit=fahrenheit&timezone=America/Phoenix';
-
       fetch(url)
         .then(res => res.json())
         .then(data => {
@@ -145,9 +153,7 @@ export default function LaveenGardenTracker() {
           let condition = "Sunny";
           if (current.weather_code >= 51) condition = "Rain";
           else if (current.weather_code >= 3) condition = "Cloudy";
-
           const daily = data.daily;
-
           setWeather({
             temperature: Math.round(current.temperature_2m),
             condition,
@@ -216,15 +222,12 @@ export default function LaveenGardenTracker() {
     if (isWriteDisabled) return;
     const file = e.target.files?.[0];
     if (!file) return;
-
     const previewUrl = URL.createObjectURL(file);
     if (isEdit) setEditPreviewUrl(previewUrl);
     else setNewPreviewUrl(previewUrl);
-
     setIsUploading(true);
     const photoUrl = await uploadPhoto(file);
     setIsUploading(false);
-
     if (photoUrl) {
       if (isEdit && editingPlant) {
         setEditingPlant({ ...editingPlant, photo_url: photoUrl });
@@ -257,13 +260,11 @@ export default function LaveenGardenTracker() {
     const safeValue = value || 'Grow Bag';
     if (isEdit && editingPlant) {
       const newSize = safeValue === 'Grow Bag' && !['3 gallon', '5 gallon', '10 gallon', '20 gallon'].includes(editingPlant.pot_size)
-        ? '10 gallon'
-        : editingPlant.pot_size;
+        ? '10 gallon' : editingPlant.pot_size;
       setEditingPlant({ ...editingPlant, container_type: safeValue, pot_size: newSize });
     } else {
       const newSize = safeValue === 'Grow Bag' && !['3 gallon', '5 gallon', '10 gallon', '20 gallon'].includes(newPlant.pot_size)
-        ? '10 gallon'
-        : newPlant.pot_size;
+        ? '10 gallon' : newPlant.pot_size;
       setNewPlant({ ...newPlant, container_type: safeValue, pot_size: newSize });
     }
   };
@@ -332,7 +333,7 @@ export default function LaveenGardenTracker() {
     if (error) toast.error('Failed to delete plant');
     else {
       await logActivity('Plant Deleted', name);
-      toast.success(`${name} and its photo deleted`);
+      toast.success(`${name} deleted`);
       fetchPlants();
       fetchActivities();
     }
@@ -355,65 +356,116 @@ export default function LaveenGardenTracker() {
     }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-[#f5f2eb] dark:bg-zinc-950">Loading Garden...</div>;
+  if (loading) return (
+    <div className="h-screen flex items-center justify-center bg-[#e4ddd2] dark:bg-zinc-950 text-[#25241c] dark:text-white">
+      Loading Garden...
+    </div>
+  );
 
+  // ─── Login screen ──────────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#f5f2eb] dark:bg-zinc-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-10">
-          <div className="flex justify-center mb-6"><Lock className="h-12 w-12 text-[#004c22] dark:text-emerald-400" /></div>
-          <h1 className="text-4xl font-bold text-center text-[#004c22] dark:text-emerald-400 mb-2">Laveen Garden</h1>
+      <div className="min-h-screen bg-[#e4ddd2] dark:bg-zinc-950 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-[#ede7db] dark:bg-zinc-900 rounded-3xl shadow-lg border border-[#c9c3b5] dark:border-zinc-800 p-10">
+          <div className="flex justify-center mb-6">
+            <Lock className="h-12 w-12 text-[#2d5c3e] dark:text-emerald-400" />
+          </div>
+          <h1 className="text-4xl font-bold text-center text-[#2d5c3e] dark:text-emerald-400 mb-2">Laveen Garden</h1>
+          <p className="text-center text-[#6b6559] dark:text-zinc-400 mb-8 text-sm">Private Garden Tracker</p>
           <form onSubmit={handlePasswordSubmit} className="space-y-6">
-            <Input type="password" value={enteredPassword} onChange={(e) => setEnteredPassword(e.target.value)} placeholder="demo (demo mode)" required className="text-lg py-6" />
-            <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 py-6 text-lg rounded-full">Enter Garden</Button>
+            <Input
+              type="password"
+              value={enteredPassword}
+              onChange={(e) => setEnteredPassword(e.target.value)}
+              placeholder="Enter password (try: demo)"
+              required
+              className="text-lg py-6 bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700 placeholder:text-[#9a9186]"
+            />
+            <Button
+              type="submit"
+              className="w-full bg-[#2d5c3e] hover:bg-[#1a3d29] dark:bg-emerald-600 py-6 text-lg rounded-full text-white"
+            >
+              Enter Garden
+            </Button>
           </form>
         </div>
       </div>
     );
   }
 
+  // ─── Main app ──────────────────────────────────────────────────────────────
   return (
-    <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-white' : 'bg-[#f5f2eb] text-[#1c1c19]'}`}>
+    <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-white' : 'bg-[#e4ddd2] text-[#25241c]'}`}>
       <Toaster position="top-center" richColors />
 
+      {/* Demo banner */}
       {isDemoMode && (
-        <div className="bg-orange-500 text-white py-3 px-6 flex items-center justify-center gap-2 font-medium">
-          <AlertTriangle className="h-5 w-5" /> DEMO MODE — All changes are temporary
+        <div className="bg-amber-700 text-amber-50 py-3 px-6 flex items-center justify-center gap-2 font-medium text-sm">
+          <AlertTriangle className="h-4 w-4" /> DEMO MODE — All changes are temporary
         </div>
       )}
 
-      <header className="sticky top-0 z-50 bg-[#fffdf7]/95 dark:bg-zinc-900/95 backdrop-blur border-b border-[#e5e2dd] dark:border-zinc-800">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-[#ddd7cb]/95 dark:bg-zinc-900/95 backdrop-blur border-b border-[#c9c3b5] dark:border-zinc-800">
         <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <span className="text-4xl">🌵</span>
-            <div className="font-bold text-3xl tracking-tighter text-[#004c22] dark:text-emerald-400">Laveen Garden</div>
+            <div>
+              <div className="font-bold text-3xl tracking-tighter text-[#2d5c3e] dark:text-emerald-400">Laveen Garden</div>
+              <div className="text-xs text-[#6b6559] dark:text-zinc-500 -mt-0.5">Sonoran Desert</div>
+            </div>
           </div>
+
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={toggleDarkMode}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDarkMode}
+              className="text-[#6b6559] hover:text-[#25241c] hover:bg-[#ccc6b8] dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
               {darkMode ? <SunIcon className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="border-[#c9c3b5] dark:border-zinc-700 text-[#25241c] dark:text-zinc-200 hover:bg-[#ccc6b8] dark:hover:bg-zinc-800"
+            >
+              Logout
+            </Button>
+
+            {/* Add Plant Modal */}
             <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
               <DialogTrigger>
-                <Button className="bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full" disabled={isDemoMode}>
+                <Button
+                  className="bg-[#2d5c3e] hover:bg-[#1a3d29] dark:bg-emerald-600 rounded-full text-white"
+                  disabled={isDemoMode}
+                >
                   <Plus className="h-4 w-4 mr-1" /> New Plant
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="sm:max-w-md bg-[#ede7db] dark:bg-zinc-900 border-[#c9c3b5] dark:border-zinc-800">
                 <DialogHeader>
-                  <DialogTitle className="text-[#004c22] dark:text-emerald-400">Add New Plant</DialogTitle>
+                  <DialogTitle className="text-[#2d5c3e] dark:text-emerald-400">Add New Plant</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={addPlant} className="space-y-5">
                   <div>
-                    <Label>Plant Name</Label>
-                    <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
+                    <Label className="text-[#25241c] dark:text-zinc-200">Plant Name</Label>
+                    <Input
+                      required
+                      value={newPlant.name}
+                      onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })}
+                      className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label>Container Type</Label>
+                      <Label className="text-[#25241c] dark:text-zinc-200">Container Type</Label>
                       <Select value={newPlant.container_type} onValueChange={(v) => handleContainerTypeChange(v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700">
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Grow Bag">Grow Bag</SelectItem>
                           <SelectItem value="Pot">Pot</SelectItem>
@@ -422,10 +474,12 @@ export default function LaveenGardenTracker() {
                       </Select>
                     </div>
                     <div>
-                      <Label>Size</Label>
+                      <Label className="text-[#25241c] dark:text-zinc-200">Size</Label>
                       {newPlant.container_type === 'Grow Bag' ? (
                         <Select value={newPlant.pot_size} onValueChange={(v) => setNewPlant({ ...newPlant, pot_size: v || '10 gallon' })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="3 gallon">3 gallon</SelectItem>
                             <SelectItem value="5 gallon">5 gallon</SelectItem>
@@ -434,38 +488,61 @@ export default function LaveenGardenTracker() {
                           </SelectContent>
                         </Select>
                       ) : (
-                        <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })} />
+                        <Input
+                          required
+                          value={newPlant.pot_size}
+                          onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })}
+                          className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                        />
                       )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label>Water every (days)</Label>
-                      <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                      <Label className="text-[#25241c] dark:text-zinc-200">Water every (days)</Label>
+                      <Input
+                        type="number" min="1" required
+                        value={newPlant.watering_frequency_days}
+                        onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })}
+                        className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                      />
                     </div>
                     <div>
-                      <Label>Fertilize every (days)</Label>
-                      <Input type="number" min="1" required value={newPlant.fertilizer_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })} />
+                      <Label className="text-[#25241c] dark:text-zinc-200">Fertilize every (days)</Label>
+                      <Input
+                        type="number" min="1" required
+                        value={newPlant.fertilizer_frequency_days}
+                        onChange={(e) => setNewPlant({ ...newPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })}
+                        className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                      />
                     </div>
                   </div>
                   <div>
-                    <Label>Plant Photo (optional)</Label>
-                    <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(false)} disabled={isDemoMode || isUploading}>
+                    <Label className="text-[#25241c] dark:text-zinc-200">Plant Photo (optional)</Label>
+                    <Button
+                      type="button" variant="outline"
+                      className="w-full flex items-center justify-center gap-2 py-6 border-[#c9c3b5] dark:border-zinc-700 bg-[#ddd7cb] dark:bg-zinc-800 hover:bg-[#ccc6b8] dark:hover:bg-zinc-700 text-[#25241c] dark:text-zinc-200"
+                      onClick={() => triggerFileInput(false)}
+                      disabled={isDemoMode || isUploading}
+                    >
                       {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                       {isUploading ? 'Uploading Photo...' : 'Choose Photo'}
                     </Button>
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e)} className="hidden" />
-
                     {newPreviewUrl && (
                       <div className="mt-4 relative">
-                        <img src={newPreviewUrl} alt="Preview" className="w-full max-h-48 object-cover rounded-xl border border-gray-200 dark:border-zinc-700" />
+                        <img src={newPreviewUrl} alt="Preview" className="w-full max-h-48 object-cover rounded-xl border border-[#c9c3b5] dark:border-zinc-700" />
                         <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={() => removePreview(false)}>
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
                     )}
                   </div>
-                  <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode || isUploading}>
+                  <Button
+                    type="submit"
+                    className="w-full bg-[#2d5c3e] hover:bg-[#1a3d29] dark:bg-emerald-600 rounded-full py-3 text-white"
+                    disabled={isDemoMode || isUploading}
+                  >
                     {isUploading ? 'Uploading Photo...' : 'Add to Garden'}
                   </Button>
                 </form>
@@ -476,81 +553,112 @@ export default function LaveenGardenTracker() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
+
+        {/* Weather widget */}
         {weather && (
-          <div className="mb-12 bg-[#fffdf7] dark:bg-zinc-900 rounded-3xl p-8 border border-[#e5e2dd] dark:border-zinc-800 shadow-sm">
+          <div className="mb-12 bg-[#ede7db] dark:bg-zinc-900 rounded-3xl p-8 border border-[#c9c3b5] dark:border-zinc-800 shadow-sm">
             <div className="flex items-center gap-8 mb-8">
-              <Sun className="h-12 w-12 text-amber-500" />
+              <Sun className="h-12 w-12 text-amber-600" />
               <div>
-                <div className="text-7xl font-light">{weather.temperature}°F</div>
-                <div className="text-2xl text-[#707a6f] dark:text-zinc-400">{weather.condition}</div>
+                <div className="text-7xl font-light text-[#25241c] dark:text-white">{weather.temperature}°F</div>
+                <div className="text-xl text-[#6b6559] dark:text-zinc-400">{weather.condition}</div>
               </div>
-              <div className="text-sm text-[#707a6f] dark:text-zinc-400">
+              <div className="text-sm text-[#6b6559] dark:text-zinc-400">
                 Wind: {weather.windSpeed} mph
               </div>
             </div>
-
             <div className="grid grid-cols-3 gap-4">
               {weather.forecast?.map((day: any, index: number) => (
-                <div key={index} className="text-center bg-[#f5f2eb] dark:bg-zinc-800 rounded-2xl p-5 border border-[#f0ede8] dark:border-zinc-700">
-                  <div className="font-medium text-sm mb-2">{day.date}</div>
+                <div
+                  key={index}
+                  className="text-center bg-[#d8d2c5] dark:bg-zinc-800 rounded-2xl p-5 border border-[#c9c3b5] dark:border-zinc-700"
+                >
+                  <div className="font-medium text-sm mb-2 text-[#25241c] dark:text-zinc-200">{day.date}</div>
                   <div className="text-4xl mb-3">{day.icon}</div>
-                  <div className="text-3xl font-light mb-1">{day.high}°</div>
-                  <div className="text-sm text-[#707a6f] dark:text-zinc-400">{day.low}°</div>
-                  <div className="text-xs mt-2 text-[#707a6f] dark:text-zinc-400">{day.condition}</div>
+                  <div className="text-3xl font-light mb-1 text-[#25241c] dark:text-white">{day.high}°</div>
+                  <div className="text-sm text-[#6b6559] dark:text-zinc-400">{day.low}°</div>
+                  <div className="text-xs mt-2 text-[#6b6559] dark:text-zinc-400">{day.condition}</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
+        {/* Plant grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
           {plants.map((plant) => {
-            const waterDueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
-            const fertDueSoon = !plant.last_fertilized || differenceInDays(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), new Date()) <= 7;
-
+            const waterDueSoon = !plant.last_watered ||
+              differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
+            const fertDueSoon = !plant.last_fertilized ||
+              differenceInDays(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), new Date()) <= 7;
             return (
-              <Card key={plant.id} className="bg-[#fffdf7] dark:bg-zinc-900 border border-[#e5e2dd] dark:border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
+              <Card
+                key={plant.id}
+                className="bg-[#ede7db] dark:bg-zinc-900 border border-[#c9c3b5] dark:border-zinc-800 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+              >
                 {plant.photo_url && (
-                  <div className="h-52 bg-gray-100 dark:bg-zinc-800">
+                  <div className="h-52 bg-[#d8d2c5] dark:bg-zinc-800">
                     <img src={plant.photo_url} alt={plant.name} className="w-full h-full object-cover" />
                   </div>
                 )}
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl">{plant.name}</CardTitle>
-                    <Badge className="bg-[#f0ede8] dark:bg-zinc-800 text-[#404940] dark:text-zinc-300">
-                      {plant.container_type} • {plant.pot_size}
+                    <CardTitle className="text-xl text-[#25241c] dark:text-white">{plant.name}</CardTitle>
+                    <Badge className="bg-[#d8d2c5] dark:bg-zinc-800 text-[#4a473e] dark:text-zinc-300 border-0 text-xs">
+                      {plant.container_type} · {plant.pot_size}
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="text-sm text-[#404940] dark:text-zinc-400 space-y-1">
-                    <p>Water: {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'} 
-                       <span className={waterDueSoon ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                         → Due {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : ''}
-                       </span>
+                <CardContent className="space-y-5">
+                  <div className="text-sm text-[#4a473e] dark:text-zinc-400 space-y-1.5">
+                    <p>
+                      <span className="text-[#6b6559] dark:text-zinc-500">Water: </span>
+                      {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'}
+                      <span className={`ml-1 ${waterDueSoon ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-[#6b6559] dark:text-zinc-500'}`}>
+                        → Due {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : ''}
+                      </span>
                     </p>
-                    <p>Fertilizer: {plant.last_fertilized ? format(new Date(plant.last_fertilized), 'MMM d') : 'Never'} 
-                       <span className={fertDueSoon ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                         → Due {plant.last_fertilized ? format(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), 'MMM d') : ''}
-                       </span>
+                    <p>
+                      <span className="text-[#6b6559] dark:text-zinc-500">Fertilizer: </span>
+                      {plant.last_fertilized ? format(new Date(plant.last_fertilized), 'MMM d') : 'Never'}
+                      <span className={`ml-1 ${fertDueSoon ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-[#6b6559] dark:text-zinc-500'}`}>
+                        → Due {plant.last_fertilized ? format(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), 'MMM d') : ''}
+                      </span>
                     </p>
                   </div>
-
                   <div className="flex gap-2">
-                    <Button onClick={() => markWatered(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 text-white rounded-full">
-                      <Droplet className="mr-2 h-4 w-4" /> Watered Today
+                    <Button
+                      onClick={() => markWatered(plant.id, plant.name)}
+                      disabled={isDemoMode}
+                      className="flex-1 bg-[#2d5c3e] hover:bg-[#1a3d29] dark:bg-emerald-600 text-white rounded-full text-sm"
+                    >
+                      <Droplet className="mr-1.5 h-4 w-4" /> Watered
                     </Button>
-                    <Button onClick={() => markFertilized(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full">
-                      <Sprout className="mr-2 h-4 w-4" /> Fertilized Today
+                    <Button
+                      onClick={() => markFertilized(plant.id, plant.name)}
+                      disabled={isDemoMode}
+                      className="flex-1 bg-amber-700 hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-full text-sm"
+                    >
+                      <Sprout className="mr-1.5 h-4 w-4" /> Fertilized
                     </Button>
                   </div>
-
-                  <div className="flex gap-3">
-                    <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} disabled={isDemoMode} className="border-[#e5e2dd] dark:border-zinc-700">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => openEditModal(plant)}
+                      disabled={isDemoMode}
+                      className="border-[#c9c3b5] dark:border-zinc-700 hover:bg-[#d8d2c5] dark:hover:bg-zinc-800 text-[#25241c] dark:text-zinc-200"
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="icon" className="text-red-600 border-[#e5e2dd] dark:border-zinc-700" onClick={() => deletePlant(plant.id, plant.name)} disabled={isDemoMode}>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="text-red-700 dark:text-red-400 border-[#c9c3b5] dark:border-zinc-700 hover:bg-[#d8d2c5] dark:hover:bg-zinc-800"
+                      onClick={() => deletePlant(plant.id, plant.name)}
+                      disabled={isDemoMode}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -560,25 +668,41 @@ export default function LaveenGardenTracker() {
           })}
         </div>
 
-        <Card className="bg-[#fffdf7] dark:bg-zinc-900 border border-[#e5e2dd] dark:border-zinc-800 rounded-3xl">
+        {/* Activity log */}
+        <Card className="bg-[#ede7db] dark:bg-zinc-900 border border-[#c9c3b5] dark:border-zinc-800 rounded-3xl">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Recent Activity</CardTitle>
-            <Button variant="destructive" size="sm" onClick={clearActivityLog} disabled={isDemoMode}>
+            <CardTitle className="flex items-center gap-2 text-[#25241c] dark:text-white">
+              <History className="h-5 w-5" /> Recent Activity
+            </CardTitle>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={clearActivityLog}
+              disabled={isDemoMode}
+              className="bg-red-700 hover:bg-red-800 dark:bg-red-700"
+            >
               <Trash className="h-4 w-4 mr-1" /> Clear Log
             </Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {activities.length === 0 ? (
-                <p className="text-center py-8 text-gray-500 dark:text-zinc-400">No activity yet</p>
+                <p className="text-center py-8 text-[#6b6559] dark:text-zinc-400">No activity yet</p>
               ) : (
                 activities.map((log) => (
-                  <div key={log.id} className="flex justify-between text-sm border-b border-gray-100 dark:border-zinc-800 pb-3 last:border-0">
+                  <div
+                    key={log.id}
+                    className="flex justify-between text-sm border-b border-[#ccc6b8] dark:border-zinc-800 pb-3 last:border-0"
+                  >
                     <div>
-                      <span className="font-medium">{log.action}</span>
-                      {log.plant_name && <span className="ml-2 text-[#004c22] dark:text-emerald-400">— {log.plant_name}</span>}
+                      <span className="font-medium text-[#25241c] dark:text-zinc-200">{log.action}</span>
+                      {log.plant_name && (
+                        <span className="ml-2 text-[#2d5c3e] dark:text-emerald-400">— {log.plant_name}</span>
+                      )}
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-zinc-500">{format(new Date(log.created_at), 'MMM d, h:mm a')}</span>
+                    <span className="text-xs text-[#6b6559] dark:text-zinc-500 whitespace-nowrap">
+                      {format(new Date(log.created_at), 'MMM d, h:mm a')}
+                    </span>
                   </div>
                 ))
               )}
@@ -587,22 +711,29 @@ export default function LaveenGardenTracker() {
         </Card>
       </main>
 
+      {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md bg-[#ede7db] dark:bg-zinc-900 border-[#c9c3b5] dark:border-zinc-800">
           <DialogHeader>
-            <DialogTitle className="text-[#004c22] dark:text-emerald-400">Edit Plant</DialogTitle>
+            <DialogTitle className="text-[#2d5c3e] dark:text-emerald-400">Edit Plant</DialogTitle>
           </DialogHeader>
           {editingPlant && (
             <form onSubmit={updatePlant} className="space-y-5">
               <div>
-                <Label>Plant Name</Label>
-                <Input value={editingPlant.name} onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })} />
+                <Label className="text-[#25241c] dark:text-zinc-200">Plant Name</Label>
+                <Input
+                  value={editingPlant.name}
+                  onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })}
+                  className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Container Type</Label>
+                  <Label className="text-[#25241c] dark:text-zinc-200">Container Type</Label>
                   <Select value={editingPlant.container_type} onValueChange={(v) => handleContainerTypeChange(v, true)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Grow Bag">Grow Bag</SelectItem>
                       <SelectItem value="Pot">Pot</SelectItem>
@@ -611,10 +742,12 @@ export default function LaveenGardenTracker() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Size</Label>
+                  <Label className="text-[#25241c] dark:text-zinc-200">Size</Label>
                   {editingPlant.container_type === 'Grow Bag' ? (
                     <Select value={editingPlant.pot_size} onValueChange={(v) => setEditingPlant({ ...editingPlant, pot_size: v || '10 gallon' })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700">
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="3 gallon">3 gallon</SelectItem>
                         <SelectItem value="5 gallon">5 gallon</SelectItem>
@@ -623,38 +756,60 @@ export default function LaveenGardenTracker() {
                       </SelectContent>
                     </Select>
                   ) : (
-                    <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({ ...editingPlant, pot_size: e.target.value })} />
+                    <Input
+                      value={editingPlant.pot_size}
+                      onChange={(e) => setEditingPlant({ ...editingPlant, pot_size: e.target.value })}
+                      className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                    />
                   )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Water every (days)</Label>
-                  <Input type="number" min="1" value={editingPlant.watering_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                  <Label className="text-[#25241c] dark:text-zinc-200">Water every (days)</Label>
+                  <Input
+                    type="number" min="1"
+                    value={editingPlant.watering_frequency_days}
+                    onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })}
+                    className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                  />
                 </div>
                 <div>
-                  <Label>Fertilize every (days)</Label>
-                  <Input type="number" min="1" value={editingPlant.fertilizer_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })} />
+                  <Label className="text-[#25241c] dark:text-zinc-200">Fertilize every (days)</Label>
+                  <Input
+                    type="number" min="1"
+                    value={editingPlant.fertilizer_frequency_days}
+                    onChange={(e) => setEditingPlant({ ...editingPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })}
+                    className="bg-[#ddd7cb] dark:bg-zinc-800 border-[#c9c3b5] dark:border-zinc-700"
+                  />
                 </div>
               </div>
               <div>
-                <Label>Update Photo</Label>
-                <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(true)} disabled={isDemoMode || isUploading}>
+                <Label className="text-[#25241c] dark:text-zinc-200">Update Photo</Label>
+                <Button
+                  type="button" variant="outline"
+                  className="w-full flex items-center justify-center gap-2 py-6 border-[#c9c3b5] dark:border-zinc-700 bg-[#ddd7cb] dark:bg-zinc-800 hover:bg-[#ccc6b8] dark:hover:bg-zinc-700 text-[#25241c] dark:text-zinc-200"
+                  onClick={() => triggerFileInput(true)}
+                  disabled={isDemoMode || isUploading}
+                >
                   {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                   {isUploading ? 'Uploading Photo...' : 'Choose New Photo'}
                 </Button>
                 <input ref={editFileInputRef} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, true)} className="hidden" />
-
                 {editPreviewUrl && (
                   <div className="mt-4 relative">
-                    <img src={editPreviewUrl} alt="Preview" className="w-full max-h-48 object-cover rounded-xl border border-gray-200 dark:border-zinc-700" />
+                    <img src={editPreviewUrl} alt="Preview" className="w-full max-h-48 object-cover rounded-xl border border-[#c9c3b5] dark:border-zinc-700" />
                     <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={() => removePreview(true)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
               </div>
-              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3" disabled={isDemoMode || isUploading}>
+              <Button
+                type="submit"
+                className="w-full bg-[#2d5c3e] hover:bg-[#1a3d29] dark:bg-emerald-600 rounded-full py-3 text-white"
+                disabled={isDemoMode || isUploading}
+              >
                 {isUploading ? 'Uploading Photo...' : 'Save Changes'}
               </Button>
             </form>
@@ -664,3 +819,4 @@ export default function LaveenGardenTracker() {
     </div>
   );
 }
+
