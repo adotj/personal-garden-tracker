@@ -63,7 +63,7 @@ export default function LaveenGardenTracker() {
     return () => clearInterval(timer);
   }, []);
 
-  // Weather for Laveen, AZ
+  // Weather for Laveen
   const fetchWeather = async () => {
     try {
       const res = await fetch(
@@ -115,6 +115,7 @@ export default function LaveenGardenTracker() {
     fetchWeather();
   }, []);
 
+  // Improved photo upload
   const uploadPhoto = async (file: File): Promise<string | null> => {
     try {
       const fileExt = file.name.split('.').pop();
@@ -135,6 +136,7 @@ export default function LaveenGardenTracker() {
         .from('plant-photos')
         .getPublicUrl(filePath);
 
+      console.log('Successfully uploaded photo:', urlData.publicUrl);
       return urlData.publicUrl;
     } catch (err) {
       console.error('Upload exception:', err);
@@ -143,22 +145,33 @@ export default function LaveenGardenTracker() {
     }
   };
 
+  // Improved photo deletion
   const deletePhoto = async (photoUrl: string | null) => {
     if (!photoUrl) return;
 
     try {
-      // Extract filename from public URL
-      const urlParts = photoUrl.split('/');
-      const fileName = urlParts[urlParts.length - 1];
+      // Extract filename from public URL (handles different URL formats)
+      const url = new URL(photoUrl);
+      let fileName = url.pathname.split('/').pop();
 
-      const { error } = await supabase.storage
-        .from('plant-photos')
-        .remove([fileName]);
+      // If the path has 'plant-photos/' in it, extract the actual filename
+      if (fileName && fileName.includes('plant-photos')) {
+        fileName = fileName.split('/').pop();
+      }
 
-      if (error) console.error('Failed to delete old photo:', error);
-      else console.log('Old photo deleted from storage:', fileName);
+      if (fileName) {
+        const { error } = await supabase.storage
+          .from('plant-photos')
+          .remove([fileName]);
+
+        if (error) {
+          console.error('Delete error:', error);
+        } else {
+          console.log('Successfully deleted old photo:', fileName);
+        }
+      }
     } catch (err) {
-      console.error('Error deleting old photo:', err);
+      console.error('Error during photo deletion:', err);
     }
   };
 
