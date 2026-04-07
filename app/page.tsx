@@ -34,7 +34,7 @@ type Activity = {
   created_at: string;
 };
 
-const SHARED_PASSWORD = "REMOVED_OLD_PASSWORD";
+const SHARED_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || "REMOVED_OLD_PASSWORD";
 
 export default function LaveenGardenTracker() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -358,11 +358,17 @@ export default function LaveenGardenTracker() {
             const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
             return (
               <Card key={plant.id} className="bg-white dark:bg-zinc-900 border border-[#e5e2dd] dark:border-zinc-800 rounded-3xl overflow-hidden">
-                {plant.photo_url && <div className="h-52 bg-gray-100 dark:bg-zinc-800"><img src={plant.photo_url} alt={plant.name} className="w-full h-full object-cover" /></div>}
+                {plant.photo_url && (
+                  <div className="h-52 bg-gray-100 dark:bg-zinc-800">
+                    <img src={plant.photo_url} alt={plant.name} className="w-full h-full object-cover" />
+                  </div>
+                )}
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-start">
                     <CardTitle className="text-xl">{plant.name}</CardTitle>
-                    <Badge className="bg-[#f0ede8] dark:bg-zinc-800 text-[#404940] dark:text-zinc-300">{plant.container_type} • {plant.pot_size}</Badge>
+                    <Badge className="bg-[#f0ede8] dark:bg-zinc-800 text-[#404940] dark:text-zinc-300">
+                      {plant.container_type} • {plant.pot_size}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -372,8 +378,12 @@ export default function LaveenGardenTracker() {
                       Next due: {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : '—'}
                     </p>
                   </div>
+
                   <div className="flex gap-3">
-                    <Button onClick={() => markWatered(plant.id, plant.name)} className="flex-1 bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 text-white rounded-full">
+                    <Button 
+                      onClick={() => markWatered(plant.id, plant.name)} 
+                      className="flex-1 bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 text-white rounded-full"
+                    >
                       <Droplet className="mr-2 h-4 w-4" /> Watered Today
                     </Button>
                     <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} className="border-[#e5e2dd] dark:border-zinc-700">
@@ -392,7 +402,9 @@ export default function LaveenGardenTracker() {
         {/* Activity Log */}
         <Card className="bg-white dark:bg-zinc-900 border border-[#e5e2dd] dark:border-zinc-800 rounded-3xl">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Recent Activity</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" /> Recent Activity
+            </CardTitle>
             <Button variant="destructive" size="sm" onClick={clearActivityLog}>
               <Trash className="h-4 w-4 mr-1" /> Clear Log
             </Button>
@@ -408,7 +420,9 @@ export default function LaveenGardenTracker() {
                       <span className="font-medium">{log.action}</span>
                       {log.plant_name && <span className="ml-2 text-[#004c22] dark:text-emerald-400">— {log.plant_name}</span>}
                     </div>
-                    <span className="text-xs text-gray-500 dark:text-zinc-500">{format(new Date(log.created_at), 'MMM d, h:mm a')}</span>
+                    <span className="text-xs text-gray-500 dark:text-zinc-500">
+                      {format(new Date(log.created_at), 'MMM d, h:mm a')}
+                    </span>
                   </div>
                 ))
               )}
@@ -424,11 +438,35 @@ export default function LaveenGardenTracker() {
           </DialogHeader>
           {editingPlant && (
             <form onSubmit={updatePlant} className="space-y-5">
-              <div><Label>Plant Name</Label><Input value={editingPlant.name} onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })} /></div>
-              <div><Label>Size</Label><Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({ ...editingPlant, pot_size: e.target.value })} /></div>
-              <div><Label>Water every (days)</Label><Input type="number" min="1" value={editingPlant.watering_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} /></div>
-              <div><Label>Update Photo</Label><input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, true)} className="w-full text-sm border border-gray-300 dark:border-zinc-700 rounded-lg p-2" /></div>
-              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3">Save Changes</Button>
+              <div>
+                <Label>Plant Name</Label>
+                <Input value={editingPlant.name} onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Size</Label>
+                <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({ ...editingPlant, pot_size: e.target.value })} />
+              </div>
+              <div>
+                <Label>Water every (days)</Label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  value={editingPlant.watering_frequency_days} 
+                  onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
+                />
+              </div>
+              <div>
+                <Label>Update Photo</Label>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={(e) => handlePhotoUpload(e, true)} 
+                  className="w-full text-sm border border-gray-300 dark:border-zinc-700 rounded-lg p-2" 
+                />
+              </div>
+              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 rounded-full py-3">
+                Save Changes
+              </Button>
             </form>
           )}
         </DialogContent>
