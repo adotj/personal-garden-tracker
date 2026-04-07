@@ -34,7 +34,7 @@ type Activity = {
   created_at: string;
 };
 
-const SHARED_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || "REMOVED_OLD_PASSWORD";
+const SHARED_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || "changeme";
 
 export default function LaveenGardenTracker() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
