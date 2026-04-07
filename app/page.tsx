@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import type { Plant } from '@/lib/plant-types';
-import { normalizePlantRow } from '@/lib/plant-helpers';
+import { normalizePlantRow, plantUpdatePayload } from '@/lib/plant-helpers';
 import { uploadPlantImage, deletePlantImageFromStorage } from '@/lib/storage-upload';
 import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -344,19 +344,27 @@ export default function LaveenGardenTracker() {
     e.preventDefault();
     if (!editingPlant) return;
     const baseline = editPhotoBaselineRef.current;
-    const wf = Math.max(1, parseInt(editWaterDays, 10) || editingPlant.watering_frequency_days);
-    const ff = Math.max(1, parseInt(editFertDays, 10) || editingPlant.fertilizer_frequency_days);
-    const payload = { ...editingPlant, watering_frequency_days: wf, fertilizer_frequency_days: ff };
-    const { error } = await supabase.from('plants').update(payload).eq('id', editingPlant.id);
-    if (error) toast.error('Failed to update plant');
+    const wParsed = parseInt(editWaterDays, 10);
+    const fParsed = parseInt(editFertDays, 10);
+    const wf = Math.max(
+      1,
+      Number.isFinite(wParsed) && wParsed >= 1 ? wParsed : editingPlant.watering_frequency_days,
+    );
+    const ff = Math.max(
+      1,
+      Number.isFinite(fParsed) && fParsed >= 1 ? fParsed : editingPlant.fertilizer_frequency_days,
+    );
+    const merged: Plant = { ...editingPlant, watering_frequency_days: wf, fertilizer_frequency_days: ff };
+    const { error } = await supabase.from('plants').update(plantUpdatePayload(merged)).eq('id', editingPlant.id);
+    if (error) toast.error(error.message || 'Failed to update plant');
     else {
       if (
-        payload.photo_url &&
-        payload.photo_url !== baseline
+        merged.photo_url &&
+        merged.photo_url !== baseline
       ) {
         const { error: gErr } = await supabase.from('plant_photos').insert({
           plant_id: editingPlant.id,
-          photo_url: payload.photo_url,
+          photo_url: merged.photo_url,
         });
         if (gErr) console.error('plant_photos insert:', gErr);
       }
