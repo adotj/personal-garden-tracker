@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Droplet, Edit, Trash2, Sun, Cloud, CloudRain } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2 } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -27,23 +27,12 @@ type Plant = {
   photo_url?: string | null;
 };
 
-type Weather = {
-  temperature: number;
-  condition: string;
-  windSpeed: number;
-  high: number;
-  low: number;
-  icon: React.ReactNode;
-};
-
 export default function LaveenGardenTracker() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingPlant, setEditingPlant] = useState<Plant | null>(null);
-  const [weather, setWeather] = useState<Weather | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
 
   const [newPlant, setNewPlant] = useState({
     name: '',
@@ -56,57 +45,6 @@ export default function LaveenGardenTracker() {
     location_in_garden: '',
     photo_url: null as string | null,
   });
-
-  // Update clock every minute
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Fetch weather for Laveen, AZ
-  const fetchWeather = async () => {
-    try {
-      const res = await fetch(
-        'https://api.open-meteo.com/v1/forecast?latitude=33.3625&longitude=-112.1695&current=temperature_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=America/Phoenix'
-      );
-      const data = await res.json();
-
-      const current = data.current;
-      const daily = data.daily;
-
-      const weatherCode = current.weather_code;
-      let condition = "Sunny";
-      let icon = <Sun className="h-8 w-8 text-amber-500" />;
-
-      if (weatherCode >= 51 && weatherCode <= 67) {
-        condition = "Rain";
-        icon = <CloudRain className="h-8 w-8 text-blue-500" />;
-      } else if (weatherCode >= 3 && weatherCode <= 48) {
-        condition = "Cloudy";
-        icon = <Cloud className="h-8 w-8 text-gray-500" />;
-      }
-
-      setWeather({
-        temperature: Math.round(current.temperature_2m),
-        condition,
-        windSpeed: Math.round(current.wind_speed_10m),
-        high: Math.round(daily.temperature_2m_max[0]),
-        low: Math.round(daily.temperature_2m_min[0]),
-        icon,
-      });
-    } catch (err) {
-      console.error("Weather fetch failed", err);
-      // Fallback
-      setWeather({
-        temperature: 82,
-        condition: "Sunny",
-        windSpeed: 8,
-        high: 95,
-        low: 68,
-        icon: <Sun className="h-8 w-8 text-amber-500" />,
-      });
-    }
-  };
 
   const fetchPlants = async () => {
     const { data, error } = await supabase
@@ -121,7 +59,6 @@ export default function LaveenGardenTracker() {
 
   useEffect(() => {
     fetchPlants();
-    fetchWeather();
   }, []);
 
   const uploadPhoto = async (file: File): Promise<string | null> => {
@@ -152,6 +89,21 @@ export default function LaveenGardenTracker() {
     }
   };
 
+  const deletePhoto = async (photoUrl: string | null) => {
+    if (!photoUrl) return;
+
+    try {
+      const url = new URL(photoUrl);
+      const fileName = url.pathname.split('/').pop();
+      if (fileName) {
+        await supabase.storage.from('plant-photos').remove([fileName]);
+        console.log('Old photo deleted:', fileName);
+      }
+    } catch (err) {
+      console.error('Failed to delete old photo:', err);
+    }
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -159,6 +111,7 @@ export default function LaveenGardenTracker() {
     const photoUrl = await uploadPhoto(file);
     if (photoUrl) {
       if (isEdit && editingPlant) {
+        if (editingPlant.photo_url) await deletePhoto(editingPlant.photo_url);
         setEditingPlant({ ...editingPlant, photo_url: photoUrl });
       } else {
         setNewPlant({ ...newPlant, photo_url: photoUrl });
@@ -209,10 +162,20 @@ export default function LaveenGardenTracker() {
   };
 
   const deletePlant = async (id: string, name: string) => {
-    if (!confirm(`Delete ${name}?`)) return;
-    await supabase.from('plants').delete().eq('id', id);
-    toast.success(`${name} deleted`);
-    fetchPlants();
+    if (!confirm(`Delete ${name} and its photo?`)) return;
+
+    // Find the plant to get photo_url before deleting
+    const plantToDelete = plants.find(p => p.id === id);
+    if (plantToDelete?.photo_url) {
+      await deletePhoto(plantToDelete.photo_url);
+    }
+
+    const { error } = await supabase.from('plants').delete().eq('id', id);
+    if (error) toast.error('Failed to delete plant');
+    else {
+      toast.success(`${name} and its photo deleted`);
+      fetchPlants();
+    }
   };
 
   const openEditModal = (plant: Plant) => {
@@ -228,7 +191,6 @@ export default function LaveenGardenTracker() {
     <div className="min-h-screen bg-[#fcf9f4] text-[#1c1c19]">
       <Toaster position="top-center" richColors />
 
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-[#fcf9f4] border-b border-[#e5e2dd]">
         <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -303,36 +265,6 @@ export default function LaveenGardenTracker() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <div className="mb-12">
-          <div className="flex items-baseline gap-4">
-            <h1 className="text-5xl font-bold text-[#004c22] tracking-tight">
-              Good morning, Laveen.
-            </h1>
-            <span className="text-2xl text-[#707a6f]">
-              {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-            </span>
-          </div>
-
-          {/* Weather Widget */}
-          {weather && (
-            <div className="mt-6 bg-white rounded-3xl p-6 flex items-center gap-8 shadow-sm border border-[#e5e2dd]">
-              <div className="flex items-center gap-6">
-                {weather.icon}
-                <div>
-                  <div className="text-6xl font-light text-[#1c1c19]">{weather.temperature}°F</div>
-                  <div className="text-[#707a6f]">{weather.condition}</div>
-                </div>
-              </div>
-
-              <div className="text-sm text-[#707a6f] space-y-1">
-                <div>Wind: {weather.windSpeed} mph</div>
-                <div>High: {weather.high}°F • Low: {weather.low}°F</div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Plant Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {plants.map((plant) => {
             const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
