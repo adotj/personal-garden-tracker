@@ -155,7 +155,7 @@ export default function LaveenGardenTracker() {
         fileName = fileName.split('/').pop() || fileName;
       }
 
-      console.log('Attempting to delete photo file:', fileName);
+      console.log('Attempting to delete photo:', fileName);
 
       const { error } = await supabase.storage
         .from('plant-photos')
@@ -168,46 +168,6 @@ export default function LaveenGardenTracker() {
       }
     } catch (err) {
       console.error('Error during photo deletion:', err);
-    }
-  };
-
-  // Manual cleanup of unused photos
-  const cleanUnusedPhotos = async () => {
-    if (!confirm('This will scan the bucket and delete photos not linked to any plant. Continue?')) return;
-
-    toast.info('Scanning for unused photos...');
-
-    try {
-      const { data: files } = await supabase.storage
-        .from('plant-photos')
-        .list('', { limit: 1000 });
-
-      if (!files || files.length === 0) {
-        toast.success('No files found in bucket.');
-        return;
-      }
-
-      const usedUrls = new Set(plants.map(p => p.photo_url).filter(Boolean));
-
-      let deletedCount = 0;
-
-      for (const file of files) {
-        const publicUrl = supabase.storage
-          .from('plant-photos')
-          .getPublicUrl(file.name).data.publicUrl;
-
-        if (!usedUrls.has(publicUrl)) {
-          await supabase.storage.from('plant-photos').remove([file.name]);
-          deletedCount++;
-          console.log('Deleted unused photo:', file.name);
-        }
-      }
-
-      toast.success(`Cleaned up ${deletedCount} unused photos.`);
-      fetchPlants(); // refresh in case any photos were linked
-    } catch (err) {
-      console.error('Cleanup error:', err);
-      toast.error('Cleanup failed - check console');
     }
   };
 
@@ -309,72 +269,66 @@ export default function LaveenGardenTracker() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={cleanUnusedPhotos}>
-              Clean Unused Photos
-            </Button>
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+            <DialogTrigger>
+              <Button className="bg-[#004c22] hover:bg-[#166534] text-white rounded-full px-6 py-2.5 flex items-center gap-2">
+                <Plus className="h-4 w-4" /> New Plant
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-[#004c22]">Add New Plant</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={addPlant} className="space-y-5">
+                <div>
+                  <Label>Plant Name</Label>
+                  <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Container Type</Label>
+                    <Select value={newPlant.container_type} onValueChange={(v) => setNewPlant({ ...newPlant, container_type: v || 'Grow Bag' })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pot">Pot</SelectItem>
+                        <SelectItem value="Grow Bag">Grow Bag</SelectItem>
+                        <SelectItem value="Raised Bed">Raised Bed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Size</Label>
+                    <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <Label>Water every (days)</Label>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    required 
+                    value={newPlant.watering_frequency_days} 
+                    onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
+                  />
+                </div>
 
-            <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-              <DialogTrigger>
-                <Button className="bg-[#004c22] hover:bg-[#166534] text-white rounded-full px-6 py-2.5 flex items-center gap-2">
-                  <Plus className="h-4 w-4" /> New Plant
+                <div>
+                  <Label>Plant Photo (optional)</Label>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={(e) => handlePhotoUpload(e)} 
+                    className="w-full text-sm border border-gray-300 rounded-lg p-2"
+                  />
+                  {newPlant.photo_url && <p className="text-xs text-green-600 mt-1">Photo ready ✓</p>}
+                </div>
+
+                <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
+                  Add to Garden
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-[#004c22]">Add New Plant</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={addPlant} className="space-y-5">
-                  <div>
-                    <Label>Plant Name</Label>
-                    <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Container Type</Label>
-                      <Select value={newPlant.container_type} onValueChange={(v) => setNewPlant({ ...newPlant, container_type: v || 'Grow Bag' })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Pot">Pot</SelectItem>
-                          <SelectItem value="Grow Bag">Grow Bag</SelectItem>
-                          <SelectItem value="Raised Bed">Raised Bed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Size</Label>
-                      <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })} />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Water every (days)</Label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      required 
-                      value={newPlant.watering_frequency_days} 
-                      onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Plant Photo (optional)</Label>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => handlePhotoUpload(e)} 
-                      className="w-full text-sm border border-gray-300 rounded-lg p-2"
-                    />
-                    {newPlant.photo_url && <p className="text-xs text-green-600 mt-1">Photo ready ✓</p>}
-                  </div>
-
-                  <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
-                    Add to Garden
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
