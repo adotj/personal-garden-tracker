@@ -8,10 +8,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        surface: "#e4dfd3",
-        "surface-container": "#ccc6bb",
-        "surface-container-low": "#d8d2c6",
-        "surface-container-high": "#c0b8ab",
+        surface: "#cec5b8",
+        "surface-container": "#b5aca0",
+        "surface-container-low": "#c4bbb0",
+        "surface-container-high": "#a69d90",
         primary: "#0d4f27",
         "primary-container": "#145e32",
         secondary: "#ac3400",

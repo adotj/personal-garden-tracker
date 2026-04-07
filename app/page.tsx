@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { supabase } from '../lib/supabase';
+import type { Plant } from '@/lib/plant-types';
+import { normalizePlantRow } from '@/lib/plant-helpers';
+import { uploadPlantImage, deletePlantImageFromStorage } from '@/lib/storage-upload';
+import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,21 +18,6 @@ import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash,
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
-type Plant = {
-  id: string;
-  name: string;
-  species?: string;
-  container_type: string;
-  pot_size: string;
-  watering_frequency_days: number;
-  last_watered: string | null;
-  fertilizer_frequency_days: number;
-  last_fertilized: string | null;
-  notes?: string;
-  location_in_garden?: string;
-  photo_url?: string | null;
-};
-
 type Activity = {
   id: string;
   action: string;
@@ -35,16 +25,6 @@ type Activity = {
   details?: string;
   created_at: string;
 };
-
-function normalizePlantRow(row: Plant): Plant {
-  return {
-    ...row,
-    watering_frequency_days: Number(row.watering_frequency_days) || 7,
-    fertilizer_frequency_days: Number(row.fertilizer_frequency_days) || 30,
-    last_watered: row.last_watered ?? null,
-    last_fertilized: row.last_fertilized ?? null,
-  };
-}
 
 function safeFormatDay(iso: string | null): string {
   if (!iso) return 'Never';
@@ -94,6 +74,7 @@ export default function LaveenGardenTracker() {
   const [weather, setWeather] = useState<any>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const editPhotoBaselineRef = useRef<string | null>(null);
 
   const [newPlant, setNewPlant] = useState({
     name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
@@ -112,7 +93,15 @@ export default function LaveenGardenTracker() {
     setDarkMode(savedDark);
     if (savedDark) document.documentElement.classList.add('dark');
 
-    if (localStorage.getItem('gardenAuthenticated') === 'true') setIsAuthenticated(true);
+    if (localStorage.getItem(GARDEN_AUTH_KEY) === 'true') {
+      setIsAuthenticated(true);
+      if (localStorage.getItem(GARDEN_MODE_KEY) === 'demo') {
+        setIsDemoMode(true);
+        loadDemoPlants();
+      } else {
+        setIsDemoMode(false);
+      }
+    }
     setLoading(false);
   }, []);
 
@@ -128,13 +117,15 @@ export default function LaveenGardenTracker() {
     if (enteredPassword === DEMO_PASSWORD) {
       setIsAuthenticated(true);
       setIsDemoMode(true);
-      localStorage.setItem('gardenAuthenticated', 'true');
+      localStorage.setItem(GARDEN_AUTH_KEY, 'true');
+      localStorage.setItem(GARDEN_MODE_KEY, 'demo');
       toast.success('Demo Mode Activated');
       loadDemoPlants();
     } else if (enteredPassword === REAL_PASSWORD) {
       setIsAuthenticated(true);
       setIsDemoMode(false);
-      localStorage.setItem('gardenAuthenticated', 'true');
+      localStorage.setItem(GARDEN_AUTH_KEY, 'true');
+      localStorage.setItem(GARDEN_MODE_KEY, 'real');
       toast.success('Welcome to your real garden 🌵');
       fetchPlants();
       fetchActivities();
@@ -147,7 +138,8 @@ export default function LaveenGardenTracker() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     setIsDemoMode(false);
-    localStorage.removeItem('gardenAuthenticated');
+    localStorage.removeItem(GARDEN_AUTH_KEY);
+    localStorage.removeItem(GARDEN_MODE_KEY);
     toast.info('Logged out');
   };
 
@@ -239,28 +231,6 @@ export default function LaveenGardenTracker() {
     await supabase.from('activity_logs').insert([{ action, plant_name }]);
   };
 
-  const uploadPhoto = async (file: File): Promise<string | null> => {
-    if (isWriteDisabled) return null;
-    try {
-      const fileName = `${Date.now()}.${file.name.split('.').pop()}`;
-      const { error } = await supabase.storage.from('plant-photos').upload(fileName, file, { upsert: true });
-      if (error) throw error;
-      const { data } = supabase.storage.from('plant-photos').getPublicUrl(fileName);
-      return data.publicUrl;
-    } catch {
-      toast.error('Photo upload failed');
-      return null;
-    }
-  };
-
-  const deletePhoto = async (photoUrl: string | null) => {
-    if (isWriteDisabled || !photoUrl) return;
-    try {
-      const fileName = photoUrl.split('/').pop() || '';
-      await supabase.storage.from('plant-photos').remove([fileName]);
-    } catch {}
-  };
-
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
     if (isWriteDisabled) return;
     const file = e.target.files?.[0];
@@ -271,8 +241,13 @@ export default function LaveenGardenTracker() {
     else setNewPreviewUrl(previewUrl);
 
     setIsUploading(true);
-    const photoUrl = await uploadPhoto(file);
+    const photoUrl = await uploadPlantImage(file);
     setIsUploading(false);
+
+    if (!photoUrl) {
+      toast.error('Photo upload failed');
+      return;
+    }
 
     if (photoUrl) {
       if (isEdit && editingPlant) {
@@ -320,9 +295,13 @@ export default function LaveenGardenTracker() {
   const addPlant = async (e: React.FormEvent) => {
     if (isWriteDisabled) return;
     e.preventDefault();
-    const { error } = await supabase.from('plants').insert([newPlant]);
+    const { data: inserted, error } = await supabase.from('plants').insert([newPlant]).select('id').single();
     if (error) toast.error('Failed to add plant');
     else {
+      if (inserted?.id && newPlant.photo_url) {
+        const { error: gErr } = await supabase.from('plant_photos').insert({ plant_id: inserted.id, photo_url: newPlant.photo_url });
+        if (gErr) console.error('plant_photos insert:', gErr);
+      }
       await logActivity('Plant Added', newPlant.name);
       toast.success('Plant added successfully! 🌱');
       if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
@@ -338,9 +317,21 @@ export default function LaveenGardenTracker() {
     if (isWriteDisabled) return;
     e.preventDefault();
     if (!editingPlant) return;
+    const baseline = editPhotoBaselineRef.current;
     const { error } = await supabase.from('plants').update(editingPlant).eq('id', editingPlant.id);
     if (error) toast.error('Failed to update plant');
     else {
+      if (
+        editingPlant.photo_url &&
+        editingPlant.photo_url !== baseline
+      ) {
+        const { error: gErr } = await supabase.from('plant_photos').insert({
+          plant_id: editingPlant.id,
+          photo_url: editingPlant.photo_url,
+        });
+        if (gErr) console.error('plant_photos insert:', gErr);
+      }
+      editPhotoBaselineRef.current = null;
       await logActivity('Plant Edited', editingPlant.name);
       toast.success('Plant updated successfully!');
       if (editPreviewUrl) URL.revokeObjectURL(editPreviewUrl);
@@ -401,14 +392,20 @@ export default function LaveenGardenTracker() {
 
   const deletePlant = async (id: string, name: string) => {
     if (isWriteDisabled) return;
-    if (!confirm(`Delete ${name} and its photo?`)) return;
+    if (!confirm(`Delete ${name} and its photos?`)) return;
     const plantToDelete = plants.find(p => p.id === id);
-    if (plantToDelete?.photo_url) await deletePhoto(plantToDelete.photo_url);
+
+    const { data: galleryRows } = await supabase.from('plant_photos').select('photo_url').eq('plant_id', id);
+    const urls = new Set<string>();
+    galleryRows?.forEach((r: { photo_url: string }) => urls.add(r.photo_url));
+    if (plantToDelete?.photo_url) urls.add(plantToDelete.photo_url);
+    for (const url of urls) await deletePlantImageFromStorage(url);
+
     const { error } = await supabase.from('plants').delete().eq('id', id);
     if (error) toast.error('Failed to delete plant');
     else {
       await logActivity('Plant Deleted', name);
-      toast.success(`${name} and its photo deleted`);
+      toast.success(`${name} deleted`);
       fetchPlants();
       fetchActivities();
     }
@@ -416,6 +413,7 @@ export default function LaveenGardenTracker() {
 
   const openEditModal = (plant: Plant) => {
     if (isWriteDisabled) return;
+    editPhotoBaselineRef.current = plant.photo_url ?? null;
     setEditingPlant({ ...plant });
     setIsEditModalOpen(true);
   };
@@ -453,7 +451,7 @@ export default function LaveenGardenTracker() {
       <Toaster position="top-center" richColors />
 
       {isDemoMode && (
-        <div className="bg-orange-500 text-white py-3 px-6 flex items-center justify-center gap-2 font-medium">
+        <div className="bg-amber-950/90 text-amber-100 py-3 px-6 flex items-center justify-center gap-2 font-medium border-b border-amber-900/50">
           <AlertTriangle className="h-5 w-5" /> DEMO MODE — All changes are temporary
         </div>
       )}
@@ -525,7 +523,8 @@ export default function LaveenGardenTracker() {
                     </div>
                   </div>
                   <div>
-                    <Label>Plant Photo (optional)</Label>
+                    <Label>Homepage photo (optional)</Label>
+                    <p className="text-xs text-desert-dust dark:text-zinc-500 mb-2">Shown on the garden grid; add more on the plant profile.</p>
                     <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(false)} disabled={isDemoMode || isUploading}>
                       {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                       {isUploading ? 'Uploading Photo...' : 'Choose Photo'}
@@ -585,52 +584,64 @@ export default function LaveenGardenTracker() {
             const showFertDue = fertDueSoon(plant);
 
             return (
-              <Card key={plant.id} className="bg-desert-parchment dark:bg-zinc-900 border border-desert-border dark:border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
-                {plant.photo_url && (
-                  <div className="h-52 bg-desert-dune dark:bg-zinc-800">
-                    <img src={plant.photo_url} alt={plant.name} className="w-full h-full object-cover" />
-                  </div>
-                )}
-                <CardHeader className="pb-4">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl">{plant.name}</CardTitle>
-                    <Badge className="bg-desert-ridge dark:bg-zinc-800 text-desert-sage dark:text-zinc-300">
-                      {plant.container_type} • {plant.pot_size}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="text-sm text-desert-sage dark:text-zinc-400 space-y-1">
-                    <p>Water: {safeFormatDay(plant.last_watered)} 
-                       <span className={showWaterDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                         → Due {safeFormatDue(plant.last_watered, plant.watering_frequency_days)}
-                       </span>
-                    </p>
-                    <p>Fertilizer: {safeFormatDay(plant.last_fertilized)} 
-                       <span className={showFertDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                         → Due {safeFormatDue(plant.last_fertilized, plant.fertilizer_frequency_days)}
-                       </span>
-                    </p>
-                  </div>
+              <Card key={plant.id} className="relative bg-desert-parchment dark:bg-zinc-900 border border-desert-border dark:border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
+                <Link
+                  href={`/plant/${plant.id}`}
+                  className="absolute inset-0 z-0 rounded-3xl"
+                  aria-label={`Open ${plant.name} profile`}
+                  prefetch
+                />
+                <div className="relative z-10 pointer-events-none">
+                  {plant.photo_url ? (
+                    <div className="h-52 w-full overflow-hidden bg-desert-dune dark:bg-zinc-800">
+                      <img src={plant.photo_url} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="flex h-40 items-center justify-center bg-desert-dune text-sm text-desert-dust dark:bg-zinc-800 dark:text-zinc-500">
+                      No homepage photo — open profile to add
+                    </div>
+                  )}
+                  <CardHeader className="pb-4">
+                    <div className="flex justify-between items-start gap-2">
+                      <CardTitle className="text-xl">{plant.name}</CardTitle>
+                      <Badge className="bg-desert-ridge dark:bg-zinc-800 text-desert-sage dark:text-zinc-300 shrink-0">
+                        {plant.container_type} • {plant.pot_size}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="text-sm text-desert-sage dark:text-zinc-400 space-y-1">
+                      <p>Water: {safeFormatDay(plant.last_watered)} 
+                         <span className={showWaterDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
+                           → Due {safeFormatDue(plant.last_watered, plant.watering_frequency_days)}
+                         </span>
+                      </p>
+                      <p>Fertilizer: {safeFormatDay(plant.last_fertilized)} 
+                         <span className={showFertDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
+                           → Due {safeFormatDue(plant.last_fertilized, plant.fertilizer_frequency_days)}
+                         </span>
+                      </p>
+                    </div>
 
-                  <div className="flex gap-2">
-                    <Button onClick={() => markWatered(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-oasis hover:bg-oasis-hover dark:bg-emerald-600 text-white rounded-full">
-                      <Droplet className="mr-2 h-4 w-4" /> Watered Today
-                    </Button>
-                    <Button onClick={() => markFertilized(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full">
-                      <Sprout className="mr-2 h-4 w-4" /> Fertilized Today
-                    </Button>
-                  </div>
+                    <div className="flex gap-2 pointer-events-auto">
+                      <Button onClick={() => markWatered(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-oasis hover:bg-oasis-hover dark:bg-emerald-600 text-white rounded-full">
+                        <Droplet className="mr-2 h-4 w-4" /> Watered Today
+                      </Button>
+                      <Button onClick={() => markFertilized(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full">
+                        <Sprout className="mr-2 h-4 w-4" /> Fertilized Today
+                      </Button>
+                    </div>
 
-                  <div className="flex gap-3">
-                    <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} disabled={isDemoMode} className="border-desert-border dark:border-zinc-700">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="icon" className="text-red-600 border-desert-border dark:border-zinc-700" onClick={() => deletePlant(plant.id, plant.name)} disabled={isDemoMode}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
+                    <div className="flex gap-3 pointer-events-auto">
+                      <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} disabled={isDemoMode} className="border-desert-border dark:border-zinc-700">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="text-red-600 border-desert-border dark:border-zinc-700" onClick={() => deletePlant(plant.id, plant.name)} disabled={isDemoMode}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </div>
               </Card>
             );
           })}
@@ -714,7 +725,8 @@ export default function LaveenGardenTracker() {
                 </div>
               </div>
               <div>
-                <Label>Update Photo</Label>
+                <Label>Homepage photo</Label>
+                <p className="text-xs text-desert-dust dark:text-zinc-500 mb-2">Replaces the card image; previous shots stay in the profile timeline when you save.</p>
                 <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(true)} disabled={isDemoMode || isUploading}>
                   {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                   {isUploading ? 'Uploading Photo...' : 'Choose New Photo'}
