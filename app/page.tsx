@@ -66,7 +66,11 @@ export default function LaveenGardenTracker() {
     else {
       toast.success('Plant added successfully! 🌱');
       setIsAddModalOpen(false);
-      setNewPlant({ name: '', species: '', container_type: 'Grow Bag', pot_size: '', watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0], notes: '', location_in_garden: '' });
+      setNewPlant({
+        name: '', species: '', container_type: 'Grow Bag', pot_size: '',
+        watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
+        notes: '', location_in_garden: ''
+      });
       fetchPlants();
     }
   };
@@ -80,9 +84,9 @@ export default function LaveenGardenTracker() {
       .update(editingPlant)
       .eq('id', editingPlant.id);
 
-    if (error) toast.error('Failed to update');
+    if (error) toast.error('Failed to update plant');
     else {
-      toast.success('Plant updated!');
+      toast.success('Plant updated successfully!');
       setIsEditModalOpen(false);
       setEditingPlant(null);
       fetchPlants();
@@ -116,20 +120,23 @@ export default function LaveenGardenTracker() {
     <div className="min-h-screen bg-[#fcf9f4] text-[#1c1c19]">
       <Toaster position="top-center" richColors />
 
-      {/* Header - matches Stitch style */}
+      {/* Header */}
       <header className="sticky top-0 z-50 bg-[#fcf9f4] border-b border-[#e5e2dd]">
         <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">🌵</span>
-            <div className="font-bold text-2xl tracking-tight text-[#004c22]">Laveen Garden</div>
+            <span className="text-4xl">🌵</span>
+            <div>
+              <div className="font-bold text-3xl tracking-tighter text-[#004c22]">Laveen Garden</div>
+              <div className="text-xs text-[#707a6f] -mt-1">Sonoran Desert</div>
+            </div>
           </div>
+
           <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
             <DialogTrigger>
-              <Button className="bg-[#004c22] hover:bg-[#166534] text-white flex items-center gap-2 rounded-full px-6">
+              <Button className="bg-[#004c22] hover:bg-[#166534] text-white rounded-full px-6 py-2.5 flex items-center gap-2">
                 <Plus className="h-4 w-4" /> New Plant
               </Button>
             </DialogTrigger>
-            {/* Add Modal */}
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-[#004c22]">Add New Plant</DialogTitle>
@@ -158,9 +165,15 @@ export default function LaveenGardenTracker() {
                 </div>
                 <div>
                   <Label>Water every (days)</Label>
-                  <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    required 
+                    value={newPlant.watering_frequency_days} 
+                    onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
+                  />
                 </div>
-                <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534]">
+                <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
                   Add to Garden
                 </Button>
               </form>
@@ -169,27 +182,27 @@ export default function LaveenGardenTracker() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-6 py-12">
         <div className="mb-12">
-          <h1 className="text-5xl font-bold text-[#004c22] mb-2">Morning, Laveen.</h1>
-          <p className="text-[#707a6f]">Your desert sanctuary is thriving under today's sun.</p>
+          <h1 className="text-5xl font-bold text-[#004c22] tracking-tight">Morning, Laveen.</h1>
+          <p className="text-[#707a6f] text-lg mt-2">Your desert sanctuary is thriving under today's sun.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {plants.map((plant) => {
             const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
             return (
-              <Card key={plant.id} className="bg-white border border-[#e5e2dd] shadow-sm hover:shadow-md transition-all rounded-3xl overflow-hidden">
+              <Card key={plant.id} className="bg-white border border-[#e5e2dd] shadow-sm hover:shadow transition-all rounded-3xl overflow-hidden">
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl text-[#1c1c19]">{plant.name}</CardTitle>
-                    <Badge className="bg-[#f0ede8] text-[#404940] font-medium">{plant.container_type} • {plant.pot_size}</Badge>
+                    <CardTitle className="text-xl">{plant.name}</CardTitle>
+                    <Badge className="bg-[#f0ede8] text-[#404940]">{plant.container_type} • {plant.pot_size}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="text-sm text-[#404940]">
                     <p>Last watered: {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'}</p>
-                    <p className={dueSoon ? 'text-[#ac3400] font-medium' : 'text-[#707a6f]'}>
+                    <p className={dueSoon ? 'text-[#ac3400] font-medium' : ''}>
                       Next due: {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : '—'}
                     </p>
                   </div>
@@ -240,7 +253,7 @@ export default function LaveenGardenTracker() {
                   onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} 
                 />
               </div>
-              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534]">
+              <Button type="submit" className="w-full bg-[#004c22] hover:bg-[#166534] rounded-full py-3">
                 Save Changes
               </Button>
             </form>
