@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout } from 'lucide-react';
 import { format, addDays, differenceInDays } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -21,6 +21,8 @@ type Plant = {
   pot_size: string;
   watering_frequency_days: number;
   last_watered: string | null;
+  fertilizer_frequency_days: number;   // ← NEW
+  last_fertilized: string | null;      // ← NEW
   notes?: string;
   location_in_garden?: string;
   photo_url?: string | null;
@@ -54,6 +56,7 @@ export default function LaveenGardenTracker() {
   const [newPlant, setNewPlant] = useState({
     name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
     watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
+    fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],  // ← NEW defaults
     notes: '', location_in_garden: '', photo_url: null as string | null,
   });
   const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
@@ -108,9 +111,9 @@ export default function LaveenGardenTracker() {
 
   const loadDemoPlants = () => {
     const demoPlants: Plant[] = [
-      { id: 'demo1', name: 'Demo Desert Rose', container_type: 'Pot', pot_size: '10gal', watering_frequency_days: 7, last_watered: '2026-04-01', photo_url: null },
-      { id: 'demo2', name: 'Demo Saguaro', container_type: 'Grow Bag', pot_size: '10 gallon', watering_frequency_days: 14, last_watered: '2026-03-25', photo_url: null },
-      { id: 'demo3', name: 'Demo Prickly Pear', container_type: 'Raised Bed', pot_size: 'Large', watering_frequency_days: 10, last_watered: '2026-04-03', photo_url: null },
+      { id: 'demo1', name: 'Demo Desert Rose', container_type: 'Pot', pot_size: '10gal', watering_frequency_days: 7, last_watered: '2026-04-01', fertilizer_frequency_days: 30, last_fertilized: '2026-03-15', photo_url: null },
+      { id: 'demo2', name: 'Demo Saguaro', container_type: 'Grow Bag', pot_size: '10 gallon', watering_frequency_days: 14, last_watered: '2026-03-25', fertilizer_frequency_days: 60, last_fertilized: '2026-02-01', photo_url: null },
+      { id: 'demo3', name: 'Demo Prickly Pear', container_type: 'Raised Bed', pot_size: 'Large', watering_frequency_days: 10, last_watered: '2026-04-03', fertilizer_frequency_days: 45, last_fertilized: '2026-03-20', photo_url: null },
     ];
     setPlants(demoPlants);
   };
@@ -184,11 +187,8 @@ export default function LaveenGardenTracker() {
     if (!file) return;
 
     const previewUrl = URL.createObjectURL(file);
-    if (isEdit) {
-      setEditPreviewUrl(previewUrl);
-    } else {
-      setNewPreviewUrl(previewUrl);
-    }
+    if (isEdit) setEditPreviewUrl(previewUrl);
+    else setNewPreviewUrl(previewUrl);
 
     setIsUploading(true);
     const photoUrl = await uploadPhoto(file);
@@ -247,7 +247,7 @@ export default function LaveenGardenTracker() {
       toast.success('Plant added successfully! 🌱');
       if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
       setIsAddModalOpen(false);
-      setNewPlant({ name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon', watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0], notes: '', location_in_garden: '', photo_url: null });
+      setNewPlant({ name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon', watering_frequency_days: 3, fertilizer_frequency_days: 30, last_watered: new Date().toISOString().split('T')[0], last_fertilized: new Date().toISOString().split('T')[0], notes: '', location_in_garden: '', photo_url: null });
       setNewPreviewUrl(null);
       fetchPlants();
       fetchActivities();
@@ -278,6 +278,17 @@ export default function LaveenGardenTracker() {
     await supabase.from('plants').update({ last_watered: today }).eq('id', id);
     await logActivity('Plant Watered', name);
     toast.success(`✅ ${name} watered today!`);
+    fetchPlants();
+    fetchActivities();
+  };
+
+  // NEW: Fertilizer function
+  const markFertilized = async (id: string, name: string) => {
+    if (isWriteDisabled) return;
+    const today = new Date().toISOString().split('T')[0];
+    await supabase.from('plants').update({ last_fertilized: today }).eq('id', id);
+    await logActivity('Plant Fertilized', name);
+    toast.success(`🌱 ${name} fertilized today!`);
     fetchPlants();
     fetchActivities();
   };
@@ -397,19 +408,19 @@ export default function LaveenGardenTracker() {
                       )}
                     </div>
                   </div>
-                  <div>
-                    <Label>Water every (days)</Label>
-                    <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Water every (days)</Label>
+                      <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                    </div>
+                    <div>
+                      <Label>Fertilize every (days)</Label>
+                      <Input type="number" min="1" required value={newPlant.fertilizer_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })} />
+                    </div>
                   </div>
                   <div>
                     <Label>Plant Photo (optional)</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full flex items-center justify-center gap-2 py-6"
-                      onClick={() => triggerFileInput(false)}
-                      disabled={isDemoMode || isUploading}
-                    >
+                    <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(false)} disabled={isDemoMode || isUploading}>
                       {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                       {isUploading ? 'Uploading Photo...' : 'Choose Photo'}
                     </Button>
@@ -451,7 +462,9 @@ export default function LaveenGardenTracker() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
           {plants.map((plant) => {
-            const dueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
+            const waterDueSoon = !plant.last_watered || differenceInDays(addDays(new Date(plant.last_watered), plant.watering_frequency_days), new Date()) <= 2;
+            const fertDueSoon = !plant.last_fertilized || differenceInDays(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), new Date()) <= 7; // fertilize due sooner warning
+
             return (
               <Card key={plant.id} className="bg-white dark:bg-zinc-900 border border-[#e5e2dd] dark:border-zinc-800 rounded-3xl overflow-hidden">
                 {plant.photo_url && (
@@ -468,16 +481,29 @@ export default function LaveenGardenTracker() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="text-sm text-[#404940] dark:text-zinc-400">
-                    <p>Last watered: {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'}</p>
-                    <p className={dueSoon ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                      Next due: {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : '—'}
+                  <div className="text-sm text-[#404940] dark:text-zinc-400 space-y-1">
+                    <p>Water: {plant.last_watered ? format(new Date(plant.last_watered), 'MMM d') : 'Never'} 
+                       <span className={waterDueSoon ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
+                         → Due {plant.last_watered ? format(addDays(new Date(plant.last_watered), plant.watering_frequency_days), 'MMM d') : ''}
+                       </span>
+                    </p>
+                    <p>Fertilizer: {plant.last_fertilized ? format(new Date(plant.last_fertilized), 'MMM d') : 'Never'} 
+                       <span className={fertDueSoon ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
+                         → Due {plant.last_fertilized ? format(addDays(new Date(plant.last_fertilized), plant.fertilizer_frequency_days), 'MMM d') : ''}
+                       </span>
                     </p>
                   </div>
-                  <div className="flex gap-3">
+
+                  <div className="flex gap-2">
                     <Button onClick={() => markWatered(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-[#004c22] hover:bg-[#166534] dark:bg-emerald-600 text-white rounded-full">
                       <Droplet className="mr-2 h-4 w-4" /> Watered Today
                     </Button>
+                    <Button onClick={() => markFertilized(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full">
+                      <Sprout className="mr-2 h-4 w-4" /> Fertilized Today
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-3">
                     <Button variant="outline" size="icon" onClick={() => openEditModal(plant)} disabled={isDemoMode} className="border-[#e5e2dd] dark:border-zinc-700">
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -518,6 +544,7 @@ export default function LaveenGardenTracker() {
         </Card>
       </main>
 
+      {/* Edit Modal - also updated with fertilizer fields */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -558,19 +585,19 @@ export default function LaveenGardenTracker() {
                   )}
                 </div>
               </div>
-              <div>
-                <Label>Water every (days)</Label>
-                <Input type="number" min="1" value={editingPlant.watering_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Water every (days)</Label>
+                  <Input type="number" min="1" value={editingPlant.watering_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                </div>
+                <div>
+                  <Label>Fertilize every (days)</Label>
+                  <Input type="number" min="1" value={editingPlant.fertilizer_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })} />
+                </div>
               </div>
               <div>
                 <Label>Update Photo</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full flex items-center justify-center gap-2 py-6"
-                  onClick={() => triggerFileInput(true)}
-                  disabled={isDemoMode || isUploading}
-                >
+                <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(true)} disabled={isDemoMode || isUploading}>
                   {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
                   {isUploading ? 'Uploading Photo...' : 'Choose New Photo'}
                 </Button>
