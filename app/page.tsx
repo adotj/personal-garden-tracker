@@ -63,7 +63,7 @@ export default function LaveenGardenTracker() {
     return () => clearInterval(timer);
   }, []);
 
-  // Weather
+  // Weather for Laveen
   const fetchWeather = async () => {
     try {
       const res = await fetch(
@@ -135,7 +135,6 @@ export default function LaveenGardenTracker() {
         .from('plant-photos')
         .getPublicUrl(filePath);
 
-      console.log('Photo uploaded successfully:', urlData.publicUrl);
       return urlData.publicUrl;
     } catch (err) {
       console.error('Upload exception:', err);
@@ -148,17 +147,15 @@ export default function LaveenGardenTracker() {
     if (!photoUrl) return;
 
     try {
-      // Extract filename from public URL - more robust method
       const url = new URL(photoUrl);
       const pathParts = url.pathname.split('/');
       let fileName = pathParts[pathParts.length - 1];
 
-      // If the filename still contains 'plant-photos', clean it
       if (fileName.includes('plant-photos')) {
         fileName = fileName.split('/').pop() || fileName;
       }
 
-      console.log('Attempting to delete photo:', fileName);
+      console.log('Attempting to delete photo file:', fileName);
 
       const { error } = await supabase.storage
         .from('plant-photos')
@@ -171,6 +168,46 @@ export default function LaveenGardenTracker() {
       }
     } catch (err) {
       console.error('Error during photo deletion:', err);
+    }
+  };
+
+  // Manual cleanup of unused photos
+  const cleanUnusedPhotos = async () => {
+    if (!confirm('This will scan the bucket and delete photos not linked to any plant. Continue?')) return;
+
+    toast.info('Scanning for unused photos...');
+
+    try {
+      const { data: files } = await supabase.storage
+        .from('plant-photos')
+        .list('', { limit: 1000 });
+
+      if (!files || files.length === 0) {
+        toast.success('No files found in bucket.');
+        return;
+      }
+
+      const usedUrls = new Set(plants.map(p => p.photo_url).filter(Boolean));
+
+      let deletedCount = 0;
+
+      for (const file of files) {
+        const publicUrl = supabase.storage
+          .from('plant-photos')
+          .getPublicUrl(file.name).data.publicUrl;
+
+        if (!usedUrls.has(publicUrl)) {
+          await supabase.storage.from('plant-photos').remove([file.name]);
+          deletedCount++;
+          console.log('Deleted unused photo:', file.name);
+        }
+      }
+
+      toast.success(`Cleaned up ${deletedCount} unused photos.`);
+      fetchPlants(); // refresh in case any photos were linked
+    } catch (err) {
+      console.error('Cleanup error:', err);
+      toast.error('Cleanup failed - check console');
     }
   };
 
@@ -254,19 +291,6 @@ export default function LaveenGardenTracker() {
     setIsEditModalOpen(true);
   };
 
-  // Manual cleanup button - useful for now
-  const cleanUnusedPhotos = async () => {
-    if (!confirm('This will attempt to clean unused photos. Continue?')) return;
-
-    toast.info('Cleaning unused photos... (this is a manual safety net)');
-
-    // For now, just log - we can expand this later if needed
-    console.log('Manual cleanup triggered. Current plants with photos:', 
-      plants.filter(p => p.photo_url).length);
-    
-    toast.success('Manual cleanup logged. Old photos should be removed on update/delete.');
-  };
-
   if (loading) {
     return <div className="flex h-screen items-center justify-center text-xl bg-[#fcf9f4]">Loading your Laveen garden... 🌵</div>;
   }
@@ -287,7 +311,7 @@ export default function LaveenGardenTracker() {
 
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={cleanUnusedPhotos}>
-              Clean Old Photos
+              Clean Unused Photos
             </Button>
 
             <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
