@@ -303,7 +303,7 @@ export default function LaveenGardenTracker() {
               type="password" 
               value={enteredPassword} 
               onChange={(e) => setEnteredPassword(e.target.value)} 
-              placeholder="demo or REMOVED_OLD_PASSWORD" 
+              placeholder="demo (demo mode)" 
               required 
               className="text-lg py-6" 
             />
