@@ -26,6 +26,21 @@ type Activity = {
   created_at: string;
 };
 
+/** Add-plant form: allow '' while typing so mobile browsers don’t snap back to defaults */
+type NewPlantForm = {
+  name: string;
+  species: string;
+  container_type: string;
+  pot_size: string;
+  watering_frequency_days: number | '';
+  fertilizer_frequency_days: number | '';
+  last_watered: string;
+  last_fertilized: string;
+  notes: string;
+  location_in_garden: string;
+  photo_url: string | null;
+};
+
 function safeFormatDay(iso: string | null): string {
   if (!iso) return 'Never';
   const d = new Date(iso);
@@ -76,12 +91,14 @@ export default function LaveenGardenTracker() {
   const [isUploading, setIsUploading] = useState(false);
   const editPhotoBaselineRef = useRef<string | null>(null);
 
-  const [newPlant, setNewPlant] = useState({
+  const [newPlant, setNewPlant] = useState<NewPlantForm>({
     name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
     watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
     fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],
     notes: '', location_in_garden: '', photo_url: null as string | null,
   });
+  const [editWaterDays, setEditWaterDays] = useState('');
+  const [editFertDays, setEditFertDays] = useState('');
   const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
   const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
 
@@ -295,11 +312,20 @@ export default function LaveenGardenTracker() {
   const addPlant = async (e: React.FormEvent) => {
     if (isWriteDisabled) return;
     e.preventDefault();
-    const { data: inserted, error } = await supabase.from('plants').insert([newPlant]).select('id').single();
+    const waterDays =
+      newPlant.watering_frequency_days === ''
+        ? 3
+        : Math.max(1, Number(newPlant.watering_frequency_days));
+    const fertDays =
+      newPlant.fertilizer_frequency_days === ''
+        ? 30
+        : Math.max(1, Number(newPlant.fertilizer_frequency_days));
+    const row = { ...newPlant, watering_frequency_days: waterDays, fertilizer_frequency_days: fertDays };
+    const { data: inserted, error } = await supabase.from('plants').insert([row]).select('id').single();
     if (error) toast.error('Failed to add plant');
     else {
-      if (inserted?.id && newPlant.photo_url) {
-        const { error: gErr } = await supabase.from('plant_photos').insert({ plant_id: inserted.id, photo_url: newPlant.photo_url });
+      if (inserted?.id && row.photo_url) {
+        const { error: gErr } = await supabase.from('plant_photos').insert({ plant_id: inserted.id, photo_url: row.photo_url });
         if (gErr) console.error('plant_photos insert:', gErr);
       }
       await logActivity('Plant Added', newPlant.name);
@@ -318,16 +344,19 @@ export default function LaveenGardenTracker() {
     e.preventDefault();
     if (!editingPlant) return;
     const baseline = editPhotoBaselineRef.current;
-    const { error } = await supabase.from('plants').update(editingPlant).eq('id', editingPlant.id);
+    const wf = Math.max(1, parseInt(editWaterDays, 10) || editingPlant.watering_frequency_days);
+    const ff = Math.max(1, parseInt(editFertDays, 10) || editingPlant.fertilizer_frequency_days);
+    const payload = { ...editingPlant, watering_frequency_days: wf, fertilizer_frequency_days: ff };
+    const { error } = await supabase.from('plants').update(payload).eq('id', editingPlant.id);
     if (error) toast.error('Failed to update plant');
     else {
       if (
-        editingPlant.photo_url &&
-        editingPlant.photo_url !== baseline
+        payload.photo_url &&
+        payload.photo_url !== baseline
       ) {
         const { error: gErr } = await supabase.from('plant_photos').insert({
           plant_id: editingPlant.id,
-          photo_url: editingPlant.photo_url,
+          photo_url: payload.photo_url,
         });
         if (gErr) console.error('plant_photos insert:', gErr);
       }
@@ -414,6 +443,8 @@ export default function LaveenGardenTracker() {
   const openEditModal = (plant: Plant) => {
     if (isWriteDisabled) return;
     editPhotoBaselineRef.current = plant.photo_url ?? null;
+    setEditWaterDays(String(plant.watering_frequency_days));
+    setEditFertDays(String(plant.fertilizer_frequency_days));
     setEditingPlant({ ...plant });
     setIsEditModalOpen(true);
   };
@@ -515,11 +546,39 @@ export default function LaveenGardenTracker() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Water every (days)</Label>
-                      <Input type="number" min="1" required value={newPlant.watering_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                      <Input
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        required
+                        value={newPlant.watering_frequency_days === '' ? '' : newPlant.watering_frequency_days}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '') setNewPlant({ ...newPlant, watering_frequency_days: '' });
+                          else {
+                            const n = parseInt(v, 10);
+                            if (!Number.isNaN(n)) setNewPlant({ ...newPlant, watering_frequency_days: n });
+                          }
+                        }}
+                      />
                     </div>
                     <div>
                       <Label>Fertilize every (days)</Label>
-                      <Input type="number" min="1" required value={newPlant.fertilizer_frequency_days} onChange={(e) => setNewPlant({ ...newPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })} />
+                      <Input
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        required
+                        value={newPlant.fertilizer_frequency_days === '' ? '' : newPlant.fertilizer_frequency_days}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === '') setNewPlant({ ...newPlant, fertilizer_frequency_days: '' });
+                          else {
+                            const n = parseInt(v, 10);
+                            if (!Number.isNaN(n)) setNewPlant({ ...newPlant, fertilizer_frequency_days: n });
+                          }
+                        }}
+                      />
                     </div>
                   </div>
                   <div>
@@ -717,11 +776,23 @@ export default function LaveenGardenTracker() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Water every (days)</Label>
-                  <Input type="number" min="1" value={editingPlant.watering_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, watering_frequency_days: parseInt(e.target.value) || 3 })} />
+                  <Input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={editWaterDays}
+                    onChange={(e) => setEditWaterDays(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label>Fertilize every (days)</Label>
-                  <Input type="number" min="1" value={editingPlant.fertilizer_frequency_days} onChange={(e) => setEditingPlant({ ...editingPlant, fertilizer_frequency_days: parseInt(e.target.value) || 30 })} />
+                  <Input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={editFertDays}
+                    onChange={(e) => setEditFertDays(e.target.value)}
+                  />
                 </div>
               </div>
               <div>
