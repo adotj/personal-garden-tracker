@@ -157,6 +157,7 @@ export default function LaveenGardenTracker() {
               high: Math.round(daily.temperature_2m_max[i]),
               low: Math.round(daily.temperature_2m_min[i]),
               condition: getWeatherCondition(daily.weather_code[i]),
+              icon: getWeatherIcon(daily.weather_code[i]),
             })),
           });
         })
@@ -171,6 +172,15 @@ export default function LaveenGardenTracker() {
     if (code <= 67 || code <= 82) return "Rain";
     if (code <= 86) return "Snow";
     return "Cloudy";
+  };
+
+  const getWeatherIcon = (code: number): string => {
+    if (code === 0) return "☀️";
+    if (code <= 3) return "⛅";
+    if (code <= 48) return "🌫️";
+    if (code <= 67 || code <= 82) return "🌧️";
+    if (code <= 86) return "❄️";
+    return "☁️";
   };
 
   const isWriteDisabled = isDemoMode;
@@ -345,11 +355,11 @@ export default function LaveenGardenTracker() {
     }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-[#f8f5f0] dark:bg-zinc-950">Loading Garden...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center bg-[#f5f2eb] dark:bg-zinc-950">Loading Garden...</div>;
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#f8f5f0] dark:bg-zinc-950 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[#f5f2eb] dark:bg-zinc-950 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white dark:bg-zinc-900 rounded-3xl shadow-xl p-10">
           <div className="flex justify-center mb-6"><Lock className="h-12 w-12 text-[#004c22] dark:text-emerald-400" /></div>
           <h1 className="text-4xl font-bold text-center text-[#004c22] dark:text-emerald-400 mb-2">Laveen Garden</h1>
@@ -363,7 +373,7 @@ export default function LaveenGardenTracker() {
   }
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-white' : 'bg-[#f8f5f0] text-[#1c1c19]'}`}>
+    <div className={`min-h-screen ${darkMode ? 'dark bg-zinc-950 text-white' : 'bg-[#f5f2eb] text-[#1c1c19]'}`}>
       <Toaster position="top-center" richColors />
 
       {isDemoMode && (
@@ -479,10 +489,12 @@ export default function LaveenGardenTracker() {
               </div>
             </div>
 
+            {/* 3-Day Forecast with Icons */}
             <div className="grid grid-cols-3 gap-4">
               {weather.forecast?.map((day: any, index: number) => (
-                <div key={index} className="text-center bg-[#f8f5f0] dark:bg-zinc-800 rounded-2xl p-4">
-                  <div className="font-medium text-sm mb-1">{day.date}</div>
+                <div key={index} className="text-center bg-[#fbf9f4] dark:bg-zinc-800 rounded-2xl p-5 border border-[#f0ede8] dark:border-zinc-700">
+                  <div className="font-medium text-sm mb-2">{day.date}</div>
+                  <div className="text-4xl mb-3">{day.icon}</div>
                   <div className="text-3xl font-light mb-1">{day.high}°</div>
                   <div className="text-sm text-[#707a6f] dark:text-zinc-400">{day.low}°</div>
                   <div className="text-xs mt-2 text-[#707a6f] dark:text-zinc-400">{day.condition}</div>
