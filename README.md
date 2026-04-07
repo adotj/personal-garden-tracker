@@ -1,13 +1,11 @@
-# Laveen Garden Tracker
+# Personal Garden Tracker
 
 A full-stack web app to track plants, watering schedules, photos, and activity in my desert garden (Laveen, AZ).
 
-**GitHub:** [github.com/adotj/laveen-garden-tracker](https://github.com/adotj/laveen-garden-tracker)
+**Live Demo:** [https://laveen-garden-tracker.vercel.app](https://laveen-garden-tracker.vercel.app)  
+**Demo Password:** `demo` (safe read-only mode — no changes will be saved)
 
-### Tech Stack
-- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui
-- **Backend/Database:** Supabase (PostgreSQL, Storage, Row Level Security)
-- **Deployment:** Vercel
+**Tech Stack:** Next.js 16 (App Router), TypeScript, Supabase (PostgreSQL + Storage), Tailwind CSS, shadcn/ui
 
 ### Features
 - Add, edit, and delete plants with container type/size and watering frequency
@@ -15,7 +13,7 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Smart, heat-aware watering reminders (adjusted for Arizona desert conditions)
 - Full activity log showing who did what and when
 - Dark mode toggle
-- Simple shared password protection (securely managed via environment variables)
+- Separate demo mode for safe public viewing
 
 ### What I Learned
 - Building and deploying a full-stack Next.js application from scratch
@@ -27,7 +25,7 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Git workflow, Vercel deployment, and proper management of secrets
 
 ### Challenges Faced
-- Debugging complex Supabase RLS policies for both the database and storage bucket
+- Debugging Supabase RLS policies for both the database and storage bucket
 - Resolving repeated CORS, build, and TypeScript errors during development
 - Learning how to securely handle credentials and clean sensitive data from Git history
 - Building logic that adapts watering schedules based on real-time weather in extreme desert heat
@@ -51,4 +49,4 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 **Recent activity log**
 
 ![Dark Mode](screenshots/dark-mode.png)  
-**Dark mode view**
+**Dark mode toggle**
