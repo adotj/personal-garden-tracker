@@ -19,3 +19,17 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Handling file uploads and automatic cleanup
 - Responsive design with Tailwind CSS
 - Git + Vercel deployment workflow
+
+- ## Screenshots
+
+![Main Dashboard](screenshots/dashboard.png)
+**Main dashboard with plants, weather, and activity log**
+
+![Add New Plant](screenshots/add-plant.png)
+**Adding a new plant with photo upload**
+
+![Activity Log](screenshots/activity-log.png)
+**Recent activity log**
+
+![Dark Mode](screenshots/dark-mode.png)
+**Dark mode view**
