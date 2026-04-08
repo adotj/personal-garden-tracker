@@ -511,6 +511,173 @@ export default function PlantProfile() {
           </div>
         )}
 
+        {/* Photo History */}
+        <div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2">📸 Photo history</h2>
+              <p className="text-sm text-desert-dust dark:text-zinc-500 mt-1">
+                {photos.length} photo{photos.length === 1 ? '' : 's'} in timeline. Tap{' '}
+                <span className="font-medium text-desert-ink dark:text-zinc-300">Select photos</span> to choose
+                several, then delete. Use <span className="font-medium text-desert-ink dark:text-zinc-300">Use as profile</span>{' '}
+                on any shot to make it the home / card picture.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {photoSelectMode ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={selectAllPhotos}
+                    disabled={photos.length === 0}
+                  >
+                    {selectedPhotoIds.size === photos.length ? 'Deselect all' : 'Select all'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="rounded-full"
+                    disabled={selectedPhotoIds.size === 0 || bulkDeleting}
+                    onClick={() => void deleteSelectedPhotos()}
+                  >
+                    {bulkDeleting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      `Delete (${selectedPhotoIds.size})`
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => {
+                      setPhotoSelectMode(false);
+                      setSelectedPhotoIds(new Set());
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => setPhotoSelectMode(true)}
+                  disabled={photos.length === 0}
+                >
+                  <CheckSquare className="h-4 w-4 mr-1.5" />
+                  Select photos
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {photos.length === 0 ? (
+            <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
+              <CardContent className="py-12 text-center">
+                <p className="text-desert-dust dark:text-zinc-500">No timeline photos yet.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+              {photos.map((photo) => {
+                const isProfile = plant.photo_url === photo.photo_url;
+                const isSelected = selectedPhotoIds.has(photo.id);
+                const busy = busyId === photo.id;
+                const setting = settingProfileForUrl === photo.photo_url;
+
+                return (
+                  <div
+                    key={photo.id}
+                    className={cn(
+                      'flex flex-col overflow-hidden rounded-2xl border shadow-sm transition-shadow',
+                      isSelected
+                        ? 'border-oasis ring-2 ring-oasis/40 dark:border-emerald-500 dark:ring-emerald-500/30'
+                        : 'border-desert-border dark:border-zinc-700',
+                    )}
+                  >
+                    <div className="relative group shrink-0">
+                      {photoSelectMode && (
+                        <button
+                          type="button"
+                          onClick={() => togglePhotoSelected(photo.id)}
+                          className="absolute left-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-md ring-1 ring-desert-border dark:bg-zinc-900 dark:ring-zinc-600"
+                          aria-label={isSelected ? 'Deselect photo' : 'Select photo'}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-5 w-5 text-oasis dark:text-emerald-400" />
+                          ) : (
+                            <Square className="h-5 w-5 text-desert-dust" />
+                          )}
+                        </button>
+                      )}
+
+                      <img
+                        src={photo.photo_url}
+                        alt=""
+                        className="aspect-square w-full object-cover"
+                      />
+
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-6">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isProfile && (
+                            <Badge className="border-0 bg-white/25 text-white backdrop-blur-sm">Profile</Badge>
+                          )}
+                          <p className="text-xs text-white">
+                            {format(new Date(photo.created_at), 'MMM d, yyyy • h:mm a')}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {!photoSelectMode ? (
+                      <div className="flex flex-col gap-1.5 border-t border-desert-border/60 bg-desert-parchment/90 p-2 dark:border-zinc-600 dark:bg-zinc-800/95">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isProfile ? 'secondary' : 'outline'}
+                          className="h-9 w-full justify-center gap-1.5 rounded-lg text-xs sm:text-sm"
+                          disabled={isProfile || setting}
+                          onClick={() => void setAsProfilePicture(photo.photo_url)}
+                        >
+                          {setting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Star className={cn('h-4 w-4', isProfile && 'fill-amber-400 text-amber-600')} />
+                          )}
+                          {isProfile ? 'Current profile photo' : 'Use as profile photo'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          className="h-9 w-full justify-center gap-1.5 rounded-lg text-xs sm:text-sm"
+                          disabled={busy}
+                          onClick={() => void deletePhoto(photo.id, photo.photo_url)}
+                        >
+                          {busy ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                          Delete photo
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Care summary + last watered / fertilized */}
         <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
           <CardHeader>
@@ -840,173 +1007,6 @@ export default function PlantProfile() {
             )}
           </CardContent>
         </Card>
-
-        {/* Photo History */}
-        <div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold flex items-center gap-2">📸 Photo history</h2>
-              <p className="text-sm text-desert-dust dark:text-zinc-500 mt-1">
-                {photos.length} photo{photos.length === 1 ? '' : 's'} in timeline. Tap{' '}
-                <span className="font-medium text-desert-ink dark:text-zinc-300">Select photos</span> to choose
-                several, then delete. Use <span className="font-medium text-desert-ink dark:text-zinc-300">Use as profile</span>{' '}
-                on any shot to make it the home / card picture.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {photoSelectMode ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={selectAllPhotos}
-                    disabled={photos.length === 0}
-                  >
-                    {selectedPhotoIds.size === photos.length ? 'Deselect all' : 'Select all'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="rounded-full"
-                    disabled={selectedPhotoIds.size === 0 || bulkDeleting}
-                    onClick={() => void deleteSelectedPhotos()}
-                  >
-                    {bulkDeleting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      `Delete (${selectedPhotoIds.size})`
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => {
-                      setPhotoSelectMode(false);
-                      setSelectedPhotoIds(new Set());
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full"
-                  onClick={() => setPhotoSelectMode(true)}
-                  disabled={photos.length === 0}
-                >
-                  <CheckSquare className="h-4 w-4 mr-1.5" />
-                  Select photos
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {photos.length === 0 ? (
-            <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
-              <CardContent className="py-12 text-center">
-                <p className="text-desert-dust dark:text-zinc-500">No timeline photos yet.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-              {photos.map((photo) => {
-                const isProfile = plant.photo_url === photo.photo_url;
-                const isSelected = selectedPhotoIds.has(photo.id);
-                const busy = busyId === photo.id;
-                const setting = settingProfileForUrl === photo.photo_url;
-
-                return (
-                  <div
-                    key={photo.id}
-                    className={cn(
-                      'flex flex-col overflow-hidden rounded-2xl border shadow-sm transition-shadow',
-                      isSelected
-                        ? 'border-oasis ring-2 ring-oasis/40 dark:border-emerald-500 dark:ring-emerald-500/30'
-                        : 'border-desert-border dark:border-zinc-700',
-                    )}
-                  >
-                    <div className="relative group shrink-0">
-                      {photoSelectMode && (
-                        <button
-                          type="button"
-                          onClick={() => togglePhotoSelected(photo.id)}
-                          className="absolute left-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-md ring-1 ring-desert-border dark:bg-zinc-900 dark:ring-zinc-600"
-                          aria-label={isSelected ? 'Deselect photo' : 'Select photo'}
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="h-5 w-5 text-oasis dark:text-emerald-400" />
-                          ) : (
-                            <Square className="h-5 w-5 text-desert-dust" />
-                          )}
-                        </button>
-                      )}
-
-                      <img
-                        src={photo.photo_url}
-                        alt=""
-                        className="aspect-square w-full object-cover"
-                      />
-
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-6">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {isProfile && (
-                            <Badge className="border-0 bg-white/25 text-white backdrop-blur-sm">Profile</Badge>
-                          )}
-                          <p className="text-xs text-white">
-                            {format(new Date(photo.created_at), 'MMM d, yyyy • h:mm a')}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {!photoSelectMode ? (
-                      <div className="flex flex-col gap-1.5 border-t border-desert-border/60 bg-desert-parchment/90 p-2 dark:border-zinc-600 dark:bg-zinc-800/95">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={isProfile ? 'secondary' : 'outline'}
-                          className="h-9 w-full justify-center gap-1.5 rounded-lg text-xs sm:text-sm"
-                          disabled={isProfile || setting}
-                          onClick={() => void setAsProfilePicture(photo.photo_url)}
-                        >
-                          {setting ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Star className={cn('h-4 w-4', isProfile && 'fill-amber-400 text-amber-600')} />
-                          )}
-                          {isProfile ? 'Current profile photo' : 'Use as profile photo'}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          className="h-9 w-full justify-center gap-1.5 rounded-lg text-xs sm:text-sm"
-                          disabled={busy}
-                          onClick={() => void deletePhoto(photo.id, photo.photo_url)}
-                        >
-                          {busy ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                          Delete photo
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
         {/* Full activity History */}
         <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
