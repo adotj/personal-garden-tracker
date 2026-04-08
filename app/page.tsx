@@ -545,12 +545,22 @@ export default function LaveenGardenTracker() {
       )}
 
       <header className="sticky top-0 z-50 bg-desert-parchment/95 dark:bg-zinc-900/95 backdrop-blur border-b border-desert-border dark:border-zinc-800">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-4xl">🌵</span>
-            <div className="font-bold text-3xl tracking-tighter text-oasis dark:text-emerald-400">Laveen Garden</div>
+        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap justify-between items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-4xl shrink-0">🌵</span>
+            <div className="min-w-0">
+              <div className="font-bold text-2xl sm:text-3xl tracking-tighter text-oasis dark:text-emerald-400">Laveen Garden</div>
+              <p className="mt-0.5 text-sm text-desert-sage dark:text-zinc-400">
+                <span className="font-semibold tabular-nums text-oasis dark:text-emerald-400" aria-live="polite">
+                  {totalPlantCount}
+                </span>
+                {' '}
+                {totalPlantCount === 1 ? 'plant' : 'plants'} total
+                {isDemoMode ? ' (demo)' : ''}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Button variant="ghost" size="icon" onClick={toggleDarkMode}>
               {darkMode ? <SunIcon className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
@@ -664,6 +674,41 @@ export default function LaveenGardenTracker() {
             </Dialog>
           </div>
         </div>
+
+        <div className="max-w-7xl mx-auto px-6 pb-4 pt-0">
+          <Label htmlFor="plant-search" className="sr-only">
+            Search plants by name
+          </Label>
+          <div className="relative w-full max-w-2xl">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-desert-dust dark:text-zinc-500"
+              aria-hidden
+            />
+            <Input
+              id="plant-search"
+              type="text"
+              inputMode="search"
+              enterKeyHint="search"
+              placeholder="Search plants by name..."
+              autoComplete="off"
+              value={plantSearch}
+              onChange={(e) => setPlantSearch(e.target.value)}
+              className="h-11 w-full pl-10 pr-11 text-base md:text-sm pointer-events-auto bg-white dark:bg-zinc-950 border-desert-border dark:border-zinc-700 shadow-sm"
+            />
+            {plantSearch.length > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 z-[1] h-9 w-9 -translate-y-1/2 text-desert-dust hover:text-desert-ink dark:text-zinc-400 dark:hover:text-white pointer-events-auto"
+                onClick={() => setPlantSearch('')}
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
@@ -693,56 +738,6 @@ export default function LaveenGardenTracker() {
             </div>
           </div>
         )}
-
-        <div className="mb-10 flex flex-col gap-6 lg:flex-row lg:items-stretch lg:justify-between lg:gap-10">
-          <div className="rounded-3xl border border-desert-border dark:border-zinc-700 bg-desert-parchment dark:bg-zinc-900 px-8 py-6 shadow-sm ring-1 ring-desert-mist/40 dark:ring-zinc-800 shrink-0">
-            <p className="text-xs font-semibold uppercase tracking-wider text-desert-dust dark:text-zinc-500">
-              Plants in your garden
-            </p>
-            <p
-              className="mt-1 text-4xl font-bold tabular-nums text-oasis dark:text-emerald-400"
-              aria-live="polite"
-            >
-              {totalPlantCount}
-            </p>
-            <p className="mt-1 text-sm text-desert-sage dark:text-zinc-400">
-              Total plants you&apos;ve added{isDemoMode ? ' (demo)' : ''}. Updates when you add or remove a plant.
-            </p>
-          </div>
-
-          <div className="flex w-full flex-1 flex-col gap-3 min-w-0">
-            <Label htmlFor="plant-search" className="text-desert-sage dark:text-zinc-400">
-              Find a plant
-            </Label>
-            <div className="relative max-w-xl w-full">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-desert-dust dark:text-zinc-500"
-                aria-hidden
-              />
-              <Input
-                id="plant-search"
-                type="search"
-                placeholder="Search plants by name..."
-                autoComplete="off"
-                value={plantSearch}
-                onChange={(e) => setPlantSearch(e.target.value)}
-                className="h-11 pl-10 pr-11 bg-white/80 dark:bg-zinc-950/80 border-desert-border dark:border-zinc-700"
-              />
-              {plantSearch.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 text-desert-dust hover:text-desert-ink dark:text-zinc-400 dark:hover:text-white"
-                  onClick={() => setPlantSearch('')}
-                  aria-label="Clear search"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        </div>
 
         {plants.length === 0 ? (
           <Card className="mb-16 rounded-3xl border border-desert-border dark:border-zinc-800 bg-desert-parchment dark:bg-zinc-900">
