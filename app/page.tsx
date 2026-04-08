@@ -421,6 +421,7 @@ export default function LaveenGardenTracker() {
       fertilizer_frequency_days: fertDays,
       fertilizer_seasons: seasons,
       fertilizer_notes: newPlant.fertilizer_notes.trim() || null,
+      notes: newPlant.notes.trim() || null,
     };
     const { data: inserted, error } = await supabase.from('plants').insert([row]).select('id').single();
     if (error) toast.error('Failed to add plant');
@@ -778,6 +779,17 @@ export default function LaveenGardenTracker() {
                       onChange={(e) => setNewPlant({ ...newPlant, fertilizer_notes: e.target.value })}
                       placeholder="e.g. 10-10-10 balanced, half strength"
                       className="mt-1 min-h-[72px] resize-y"
+                      disabled={isDemoMode}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="new-plant-notes">Plant notes (optional)</Label>
+                    <Textarea
+                      id="new-plant-notes"
+                      value={newPlant.notes}
+                      onChange={(e) => setNewPlant({ ...newPlant, notes: e.target.value })}
+                      placeholder="Shared journal — observations, reminders, anything you both should know"
+                      className="mt-1 min-h-[88px] resize-y"
                       disabled={isDemoMode}
                     />
                   </div>
@@ -1224,6 +1236,22 @@ export default function LaveenGardenTracker() {
                     })
                   }
                   className="mt-1 min-h-[72px]"
+                  disabled={isDemoMode}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-plant-notes">Plant notes (shared journal)</Label>
+                <Textarea
+                  id="edit-plant-notes"
+                  value={editingPlant.notes ?? ''}
+                  onChange={(e) =>
+                    setEditingPlant({
+                      ...editingPlant,
+                      notes: e.target.value || null,
+                    })
+                  }
+                  className="mt-1 min-h-[100px]"
+                  placeholder="Observations, tasks, anything you both should know…"
                   disabled={isDemoMode}
                 />
               </div>

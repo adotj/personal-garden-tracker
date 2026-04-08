@@ -16,7 +16,8 @@ export type Plant = {
   fertilizer_seasons?: FertilizerSeason[] | null;
   /** Optional product / method notes */
   fertilizer_notes?: string | null;
-  notes?: string;
+  /** Free-form plant journal / shared care notes */
+  notes?: string | null;
   location_in_garden?: string;
   /** Shown on homepage / plant cards — the “key” photo */
   photo_url?: string | null;

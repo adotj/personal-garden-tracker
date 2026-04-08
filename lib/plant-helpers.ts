@@ -10,13 +10,14 @@ export function normalizePlantRow(row: Plant): Plant {
     last_fertilized: row.last_fertilized ?? null,
     fertilizer_seasons: normalizeFertilizerSeasons(row.fertilizer_seasons),
     fertilizer_notes: row.fertilizer_notes ?? null,
+    notes: row.notes ?? null,
   };
 }
 
 /**
  * Only columns the edit flow actually persists — do not spread select('*') rows into .update()
- * (avoids `id`, `created_at`, etc.) and omit optional columns your DB may not have yet (`species`,
- * `notes`, `location_in_garden`) so PostgREST does not return 400 for unknown columns.
+ * (avoids `id`, `created_at`, etc.). Omit columns your DB may not have yet (`species`,
+ * `location_in_garden`) if needed.
  */
 export function plantUpdatePayload(p: Plant) {
   return {
@@ -29,6 +30,7 @@ export function plantUpdatePayload(p: Plant) {
     last_fertilized: p.last_fertilized,
     fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
     fertilizer_notes: p.fertilizer_notes ?? null,
+    notes: p.notes?.trim() ? p.notes.trim() : null,
     photo_url: p.photo_url ?? null,
   };
 }

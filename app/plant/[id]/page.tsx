@@ -21,7 +21,18 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast, Toaster } from 'sonner';
-import { ArrowLeft, Trash2, Loader2, Image as ImageIcon, Droplet, Sprout, Star, CheckSquare, Square } from 'lucide-react';
+import {
+  ArrowLeft,
+  Trash2,
+  Loader2,
+  Image as ImageIcon,
+  Droplet,
+  Sprout,
+  Star,
+  CheckSquare,
+  Square,
+  NotebookPen,
+} from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -87,6 +98,8 @@ export default function PlantProfile() {
     notes: '',
   });
   const [fertSettingsBusy, setFertSettingsBusy] = useState(false);
+  const [plantNotesDraft, setPlantNotesDraft] = useState('');
+  const [plantNotesBusy, setPlantNotesBusy] = useState(false);
 
   useEffect(() => {
     setIsWriteDisabled(getGardenMode() === 'demo');
@@ -241,6 +254,25 @@ export default function PlantProfile() {
     }
   };
 
+  const savePlantNotes = async () => {
+    if (!plant || isWriteDisabled) return;
+    setPlantNotesBusy(true);
+    try {
+      const { error } = await supabase
+        .from('plants')
+        .update({ notes: plantNotesDraft.trim() || null })
+        .eq('id', plantId);
+      if (error) throw error;
+      toast.success('Notes saved');
+      await fetchPlant();
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not save notes — add the `notes` column if you see a schema error.');
+    } finally {
+      setPlantNotesBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!plantId) return;
     let cancelled = false;
@@ -265,6 +297,7 @@ export default function PlantProfile() {
       seasons: normalizeFertilizerSeasons(plant.fertilizer_seasons),
       notes: plant.fertilizer_notes ?? '',
     });
+    setPlantNotesDraft(plant.notes ?? '');
   }, [plant?.id]);
 
   const togglePhotoSelected = (id: string) => {
@@ -397,6 +430,8 @@ export default function PlantProfile() {
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
+  const plantNotesMatchesPlant =
+    (plantNotesDraft.trim() || '') === ((plant.notes ?? '').trim());
 
   return (
     <div className="min-h-screen bg-desert-page dark:bg-zinc-950 text-desert-ink dark:text-white">
@@ -416,7 +451,26 @@ export default function PlantProfile() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-10 space-y-12">
+      <main className="max-w-4xl mx-auto px-6 pt-4 pb-10 sm:pt-6 space-y-12">
+        {/* Profile picture — first so it reads as the hero */}
+        {plant.photo_url && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <ImageIcon className="h-5 w-5" /> Profile picture
+            </h2>
+            <div className="relative rounded-3xl overflow-hidden border border-desert-border dark:border-zinc-700 shadow-sm">
+              <img
+                src={plant.photo_url}
+                alt={plant.name}
+                className="w-full max-h-[min(420px,55vh)] object-cover"
+              />
+            </div>
+            <p className="mt-2 text-sm text-desert-dust dark:text-zinc-500">
+              Choose a different image from photo history below, or add one from the garden dashboard.
+            </p>
+          </div>
+        )}
+
         {/* Care summary + last watered / fertilized */}
         <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
           <CardHeader>
@@ -516,6 +570,46 @@ export default function PlantProfile() {
                 <p className="w-full text-xs text-amber-700 dark:text-amber-400">Demo mode — care actions are disabled.</p>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <NotebookPen className="h-5 w-5 text-oasis dark:text-emerald-400" />
+              Plant notes
+            </CardTitle>
+            <p className="text-sm text-desert-dust dark:text-zinc-500">
+              Shared space for anything you both want to remember—pests, pruning, repotting, observations, or
+              “water extra when it hits 110°F.”
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="profile-plant-notes" className="sr-only">
+                Plant notes
+              </Label>
+              <Textarea
+                id="profile-plant-notes"
+                value={plantNotesDraft}
+                onChange={(e) => setPlantNotesDraft(e.target.value)}
+                placeholder="Type notes here… (saved to this plant for everyone using the garden)"
+                disabled={isWriteDisabled}
+                className="min-h-[160px] resize-y text-base leading-relaxed"
+              />
+            </div>
+            <Button
+              type="button"
+              className="rounded-full bg-oasis hover:bg-oasis-hover dark:bg-emerald-600"
+              disabled={isWriteDisabled || plantNotesBusy || plantNotesMatchesPlant}
+              onClick={() => void savePlantNotes()}
+            >
+              {plantNotesBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save notes
+            </Button>
+            {isWriteDisabled ? (
+              <p className="text-xs text-amber-700 dark:text-amber-400">Demo mode — notes are read-only.</p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -651,25 +745,6 @@ export default function PlantProfile() {
             )}
           </CardContent>
         </Card>
-
-        {/* Homepage Photo */}
-        {plant.photo_url && (
-          <div>
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <ImageIcon className="h-5 w-5" /> Profile picture
-            </h2>
-            <div className="relative rounded-3xl overflow-hidden border border-desert-border dark:border-zinc-700">
-              <img
-                src={plant.photo_url}
-                alt={plant.name}
-                className="w-full max-h-[420px] object-cover"
-              />
-            </div>
-            <p className="mt-2 text-sm text-desert-dust dark:text-zinc-500">
-              Choose a different image from photo history below, or add one from the garden dashboard.
-            </p>
-          </div>
-        )}
 
         {/* Photo History */}
         <div>
