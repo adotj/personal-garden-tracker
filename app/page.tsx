@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout, Search } from 'lucide-react';
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
@@ -553,18 +553,8 @@ export default function LaveenGardenTracker() {
                 Laveen Garden
               </div>
               <span
-                className="shrink-0 tabular-nums"
+                className="shrink-0 rounded-full border border-desert-border/50 bg-desert-dune/40 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-oasis dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-emerald-300"
                 aria-label={`${totalPlantCount} plants in your garden`}
-                style={{
-                  display: 'inline-block',
-                  padding: '4px 10px',
-                  borderRadius: 8,
-                  fontSize: 14,
-                  fontWeight: 700,
-                  border: darkMode ? '1px solid #3f3f46' : '1px solid #8a8170',
-                  backgroundColor: darkMode ? '#27272a' : '#ffffff',
-                  color: darkMode ? '#86efac' : '#0d4f27',
-                }}
               >
                 {totalPlantCount} {totalPlantCount === 1 ? 'plant' : 'plants'}
                 {isDemoMode ? ' · demo' : ''}
@@ -686,75 +676,56 @@ export default function LaveenGardenTracker() {
           </div>
         </div>
 
-        {/* Count + search use inline styles so they stay visible even if Tailwind/shadcn CSS fails to load. */}
-        <div
-          className="max-w-7xl mx-auto px-6 pb-3 pt-2"
-          style={{
-            borderTop: `2px solid ${darkMode ? '#22c55e' : '#0d4f27'}`,
-            backgroundColor: darkMode ? '#18181b' : '#fafaf9',
-          }}
-        >
-          <p
-            role="status"
-            style={{
-              margin: '0 0 10px',
-              fontSize: 15,
-              color: darkMode ? '#d4d4d8' : '#374151',
-            }}
-          >
-            <strong style={{ color: darkMode ? '#86efac' : '#0d4f27', fontSize: 22 }}>
-              {totalPlantCount}
-            </strong>
-            <span style={{ marginLeft: 6 }}>
-              {totalPlantCount === 1 ? 'plant' : 'plants'} in your garden{isDemoMode ? ' (demo preview)' : ''}
-            </span>
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, maxWidth: 560 }}>
-            <label htmlFor="garden-plant-filter" style={{ width: '100%', fontSize: 13, fontWeight: 600, color: darkMode ? '#a1a1aa' : '#57534e' }}>
-              Search by plant name
-            </label>
-            <input
-              id="garden-plant-filter"
-              name="garden-plant-filter"
-              type="search"
-              value={plantSearch}
-              onChange={(e) => setPlantSearch(e.target.value)}
-              placeholder="Type to filter…"
-              autoComplete="off"
-              spellCheck={false}
-              style={{
-                flex: '1 1 220px',
-                minWidth: 200,
-                minHeight: 44,
-                boxSizing: 'border-box',
-                padding: '10px 12px',
-                fontSize: 16,
-                borderRadius: 8,
-                border: darkMode ? '2px solid #52525b' : '2px solid #8a8170',
-                backgroundColor: darkMode ? '#27272a' : '#ffffff',
-                color: darkMode ? '#fafafa' : '#1c1917',
-                outline: 'none',
-              }}
-            />
-            {plantSearch.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setPlantSearch('')}
-                style={{
-                  minHeight: 44,
-                  padding: '0 14px',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  border: darkMode ? '1px solid #71717a' : '1px solid #8a8170',
-                  background: darkMode ? '#3f3f46' : '#e7e5e4',
-                  color: darkMode ? '#fafafa' : '#1c1917',
-                  cursor: 'pointer',
-                }}
-              >
-                Clear
-              </button>
-            ) : null}
+        <div className="max-w-7xl mx-auto border-t border-desert-border/30 bg-gradient-to-b from-desert-dune/35 to-desert-dune/10 px-4 pb-3 pt-3 dark:border-zinc-700/50 dark:from-zinc-800/90 dark:to-zinc-900/40 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5" role="status" aria-live="polite">
+              <span className="text-xl font-semibold tabular-nums text-oasis dark:text-emerald-400 sm:text-2xl">
+                {totalPlantCount}
+              </span>
+              <span className="text-sm text-desert-sage dark:text-zinc-400">
+                {totalPlantCount === 1 ? 'plant' : 'plants'} in your garden
+                {isDemoMode ? ' · demo' : ''}
+              </span>
+            </div>
+
+            <div className="relative w-full min-w-0 sm:max-w-md">
+              <label htmlFor="garden-plant-filter" className="sr-only">
+                Search plants by name
+              </label>
+              <Search
+                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-desert-dust opacity-80 dark:text-zinc-500"
+                aria-hidden
+              />
+              <input
+                id="garden-plant-filter"
+                name="garden-plant-filter"
+                type="search"
+                value={plantSearch}
+                onChange={(e) => setPlantSearch(e.target.value)}
+                placeholder="Search plants by name…"
+                autoComplete="off"
+                spellCheck={false}
+                className={cn(
+                  'h-10 w-full rounded-full border border-desert-border/50 bg-desert-parchment/70 pl-10 text-sm text-desert-ink shadow-sm',
+                  'placeholder:text-desert-dust/65',
+                  'transition-[box-shadow,border-color] duration-200',
+                  'focus:border-oasis focus:outline-none focus:ring-2 focus:ring-oasis/25',
+                  'dark:border-zinc-600 dark:bg-zinc-950/45 dark:text-zinc-100 dark:placeholder:text-zinc-500',
+                  'dark:focus:border-emerald-500 dark:focus:ring-emerald-500/25',
+                  plantSearch.length > 0 ? 'pr-11' : 'pr-4',
+                )}
+              />
+              {plantSearch.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setPlantSearch('')}
+                  className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-desert-dust transition-colors hover:bg-desert-mist/60 hover:text-desert-ink dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
