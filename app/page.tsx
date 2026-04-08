@@ -18,7 +18,6 @@ import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash,
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
-import { GardenPlantsToolbar } from '@/components/GardenPlantsToolbar';
 import { cn } from '@/lib/utils';
 
 type Activity = {
@@ -553,14 +552,23 @@ export default function LaveenGardenTracker() {
               <div className="font-bold text-2xl sm:text-3xl tracking-tighter text-oasis dark:text-emerald-400">
                 Laveen Garden
               </div>
-              <Badge
-                variant="secondary"
-                className="shrink-0 border border-desert-border/60 bg-white/90 px-2.5 py-0.5 text-sm font-semibold tabular-nums text-desert-ink dark:border-zinc-600 dark:bg-zinc-800 dark:text-emerald-300"
+              <span
+                className="shrink-0 tabular-nums"
                 aria-label={`${totalPlantCount} plants in your garden`}
+                style={{
+                  display: 'inline-block',
+                  padding: '4px 10px',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  border: darkMode ? '1px solid #3f3f46' : '1px solid #8a8170',
+                  backgroundColor: darkMode ? '#27272a' : '#ffffff',
+                  color: darkMode ? '#86efac' : '#0d4f27',
+                }}
               >
                 {totalPlantCount} {totalPlantCount === 1 ? 'plant' : 'plants'}
                 {isDemoMode ? ' · demo' : ''}
-              </Badge>
+              </span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -677,15 +685,81 @@ export default function LaveenGardenTracker() {
             </Dialog>
           </div>
         </div>
+
+        {/* Count + search use inline styles so they stay visible even if Tailwind/shadcn CSS fails to load. */}
+        <div
+          className="max-w-7xl mx-auto px-6 pb-3 pt-2"
+          style={{
+            borderTop: `2px solid ${darkMode ? '#22c55e' : '#0d4f27'}`,
+            backgroundColor: darkMode ? '#18181b' : '#fafaf9',
+          }}
+        >
+          <p
+            role="status"
+            style={{
+              margin: '0 0 10px',
+              fontSize: 15,
+              color: darkMode ? '#d4d4d8' : '#374151',
+            }}
+          >
+            <strong style={{ color: darkMode ? '#86efac' : '#0d4f27', fontSize: 22 }}>
+              {totalPlantCount}
+            </strong>
+            <span style={{ marginLeft: 6 }}>
+              {totalPlantCount === 1 ? 'plant' : 'plants'} in your garden{isDemoMode ? ' (demo preview)' : ''}
+            </span>
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, maxWidth: 560 }}>
+            <label htmlFor="garden-plant-filter" style={{ width: '100%', fontSize: 13, fontWeight: 600, color: darkMode ? '#a1a1aa' : '#57534e' }}>
+              Search by plant name
+            </label>
+            <input
+              id="garden-plant-filter"
+              name="garden-plant-filter"
+              type="search"
+              value={plantSearch}
+              onChange={(e) => setPlantSearch(e.target.value)}
+              placeholder="Type to filter…"
+              autoComplete="off"
+              spellCheck={false}
+              style={{
+                flex: '1 1 220px',
+                minWidth: 200,
+                minHeight: 44,
+                boxSizing: 'border-box',
+                padding: '10px 12px',
+                fontSize: 16,
+                borderRadius: 8,
+                border: darkMode ? '2px solid #52525b' : '2px solid #8a8170',
+                backgroundColor: darkMode ? '#27272a' : '#ffffff',
+                color: darkMode ? '#fafafa' : '#1c1917',
+                outline: 'none',
+              }}
+            />
+            {plantSearch.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setPlantSearch('')}
+                style={{
+                  minHeight: 44,
+                  padding: '0 14px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: darkMode ? '1px solid #71717a' : '1px solid #8a8170',
+                  background: darkMode ? '#3f3f46' : '#e7e5e4',
+                  color: darkMode ? '#fafafa' : '#1c1917',
+                  cursor: 'pointer',
+                }}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <GardenPlantsToolbar
-          totalPlantCount={totalPlantCount}
-          isDemoMode={isDemoMode}
-          plantSearch={plantSearch}
-          onPlantSearchChange={setPlantSearch}
-        />
         {weather && (
           <div className="mb-12 bg-desert-parchment dark:bg-zinc-900 rounded-3xl p-8 border border-desert-border dark:border-zinc-800 shadow-sm">
             <div className="flex items-center gap-8 mb-8">
