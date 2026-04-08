@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '@/lib/plant-types';
@@ -16,6 +16,7 @@ import {
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
 import { deletePlantImageFromStorage } from '@/lib/storage-upload';
 import { datetimeLocalToIsoUtc, toDatetimeLocalValue } from '@/lib/photo-timeline';
+import { buildPlantTroubleshootingPrompt } from '@/lib/plant-ai-prompt';
 import { getGardenMode } from '@/lib/garden-session';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -38,6 +39,7 @@ import {
   NotebookPen,
   Sun,
   CalendarClock,
+  Sparkles,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { addDays } from 'date-fns';
@@ -110,6 +112,7 @@ export default function PlantProfile() {
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [photoDateDialog, setPhotoDateDialog] = useState<{ id: string; datetimeLocal: string } | null>(null);
   const [photoDateSaving, setPhotoDateSaving] = useState(false);
+  const [aiPromptOpen, setAiPromptOpen] = useState(false);
 
   useEffect(() => {
     setIsWriteDisabled(getGardenMode() === 'demo');
@@ -489,6 +492,21 @@ export default function PlantProfile() {
 
   const careLogs = activities.filter((log) => isWaterLogAction(log.action) || isFertLogAction(log.action));
 
+  const troubleshootingPrompt = useMemo(() => {
+    if (!plant) return '';
+    return buildPlantTroubleshootingPrompt(plant, { journalEntries: plantNoteEntries });
+  }, [plant, plantNoteEntries]);
+
+  const copyTroubleshootingPrompt = async () => {
+    if (!troubleshootingPrompt) return;
+    try {
+      await navigator.clipboard.writeText(troubleshootingPrompt);
+      toast.success('Copied to clipboard');
+    } catch {
+      toast.error('Could not copy — select the text in the dialog instead');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-desert-page dark:bg-zinc-950">
@@ -512,22 +530,34 @@ export default function PlantProfile() {
       <Toaster position="top-center" richColors />
 
       <header className="sticky top-0 z-50 bg-desert-parchment/95 dark:bg-zinc-900/95 backdrop-blur border-b border-desert-border dark:border-zinc-800">
-        <div className="max-w-4xl mx-auto px-6 py-5 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-oasis dark:text-emerald-400">{plant.name}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Badge>
-                {plant.container_type} • {plant.pot_size}
-              </Badge>
-              <Badge variant="secondary" className="gap-1 font-normal">
-                <Sun className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                {sunExposureLabel(plant.sun_exposure)}
-              </Badge>
+        <div className="max-w-4xl mx-auto px-6 py-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-3xl font-bold text-oasis dark:text-emerald-400">{plant.name}</h1>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <Badge>
+                  {plant.container_type} • {plant.pot_size}
+                </Badge>
+                <Badge variant="secondary" className="gap-1 font-normal">
+                  <Sun className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {sunExposureLabel(plant.sun_exposure)}
+                </Badge>
+              </div>
             </div>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 self-start rounded-full border-desert-border dark:border-zinc-600"
+            onClick={() => setAiPromptOpen(true)}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            AI prompt
+          </Button>
         </div>
       </header>
 
@@ -1134,6 +1164,37 @@ export default function PlantProfile() {
               >
                 {photoDateSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={aiPromptOpen} onOpenChange={setAiPromptOpen}>
+        <DialogContent className="max-h-[min(90vh,640px)] max-w-2xl overflow-hidden flex flex-col gap-0 p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b border-desert-border px-6 py-4 dark:border-zinc-700">
+            <DialogTitle>Prompt for AI troubleshooting</DialogTitle>
+            <p className="text-sm font-normal text-desert-dust dark:text-zinc-400">
+              Copy into ChatGPT, Claude, or another assistant, then describe symptoms or attach a photo.
+            </p>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4">
+            <Textarea
+              readOnly
+              value={troubleshootingPrompt}
+              className="min-h-[min(320px,45vh)] resize-none font-mono text-xs leading-relaxed"
+              aria-label="Troubleshooting prompt text"
+            />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setAiPromptOpen(false)}>
+                Close
+              </Button>
+              <Button
+                type="button"
+                className="bg-oasis hover:bg-oasis-hover dark:bg-emerald-600"
+                onClick={() => void copyTroubleshootingPrompt()}
+              >
+                Copy to clipboard
               </Button>
             </div>
           </div>
