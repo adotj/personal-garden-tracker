@@ -10,12 +10,10 @@ import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout, RefreshCw, Search, XCircle } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, Moon, Sun as SunIcon, RefreshCw, Search, XCircle } from 'lucide-react';
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 
@@ -41,7 +39,7 @@ type NewPlantForm = {
   photo_url: string | null;
 };
 
-// Helper functions
+// ==================== HELPER FUNCTIONS ====================
 function safeFormatDay(iso: string | null): string {
   if (!iso) return 'Never';
   const d = new Date(iso);
@@ -82,35 +80,12 @@ export default function LaveenGardenTracker() {
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [enteredPassword, setEnteredPassword] = useState('');
   const [plants, setPlants] = useState<Plant[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingPlant, setEditingPlant] = useState<Plant | null>(null);
-  const [weather, setWeather] = useState<any>(null);
   const [darkMode, setDarkMode] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
 
-  // Search & Sort
+  // Search + Sort
   const [searchTerm, setSearchTerm] = useState('');
   const [sortMode, setSortMode] = useState<'name-asc' | 'name-desc' | 'watered' | 'fertilized'>('name-asc');
-
-  const mainRef = useRef<HTMLDivElement>(null);
-  const editPhotoBaselineRef = useRef<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const editFileInputRef = useRef<HTMLInputElement>(null);
-
-  const [newPlant, setNewPlant] = useState<NewPlantForm>({
-    name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
-    watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
-    fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],
-    notes: '', location_in_garden: '', photo_url: null,
-  });
-
-  const [editWaterDays, setEditWaterDays] = useState('');
-  const [editFertDays, setEditFertDays] = useState('');
-  const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
-  const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
 
   // Filtered + Sorted Plants
   const filteredPlants = plants
@@ -128,16 +103,25 @@ export default function LaveenGardenTracker() {
     setSortMode('name-asc');
   };
 
-  // ==================== YOUR EXISTING FUNCTIONS (add them here) ====================
-  const toggleDarkMode = () => { /* your code */ };
-  const handleLogout = () => { /* your code */ };
-  const handleRefresh = async () => { /* your code */ };
-  // addPlant, updatePlant, markWatered, markFertilized, deletePlant, openEditModal, etc.
+  const toggleDarkMode = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    localStorage.setItem('darkMode', newMode.toString());
+    newMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setIsDemoMode(false);
+    localStorage.removeItem(GARDEN_AUTH_KEY);
+    localStorage.removeItem(GARDEN_MODE_KEY);
+    toast.info('Logged out');
+  };
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-desert-page dark:bg-zinc-950">Loading Garden...</div>;
 
   if (!isAuthenticated) {
-    // your login screen (unchanged)
+    // Your login screen
   }
 
   return (
@@ -145,12 +129,12 @@ export default function LaveenGardenTracker() {
       <Toaster position="top-center" richColors />
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* SEARCH + SORT + TOTAL COUNT */}
+        {/* Search + Sort + Total Count */}
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-8">
           <div className="flex-1 max-w-md relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search plants..."
+              placeholder="Search plants by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -180,7 +164,7 @@ export default function LaveenGardenTracker() {
         </div>
 
         {/* Plants Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredPlants.map((plant) => {
             const showWaterDue = waterDueSoon(plant);
             const showFertDue = fertDueSoon(plant);
@@ -201,37 +185,19 @@ export default function LaveenGardenTracker() {
                   <CardHeader className="pb-4">
                     <div className="flex justify-between items-start gap-2">
                       <CardTitle className="text-xl">{plant.name}</CardTitle>
-                      <Badge className="bg-desert-ridge dark:bg-zinc-800 text-desert-sage dark:text-zinc-300">
-                        {plant.container_type} • {plant.pot_size}
-                      </Badge>
+                      <Badge>{plant.container_type} • {plant.pot_size}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="text-sm text-desert-sage dark:text-zinc-400 space-y-1">
-                      <p>Water: {safeFormatDay(plant.last_watered)}
-                        <span className={showWaterDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                          → Due {safeFormatDue(plant.last_watered, plant.watering_frequency_days)}
-                        </span>
-                      </p>
-                      <p>Fertilizer: {safeFormatDay(plant.last_fertilized)}
-                        <span className={showFertDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                          → Due {safeFormatDue(plant.last_fertilized, plant.fertilizer_frequency_days)}
-                        </span>
-                      </p>
+                    <div className="text-sm space-y-1">
+                      <p>Water: {safeFormatDay(plant.last_watered)}</p>
+                      <p>Fertilizer: {safeFormatDay(plant.last_fertilized)}</p>
                     </div>
-                    <div className="flex gap-2 pointer-events-auto">
-                      <Button onClick={() => {/* markWatered call */}} disabled={isDemoMode} className="flex-1">
-                        <Droplet className="mr-2 h-4 w-4" /> Watered Today
-                      </Button>
-                      <Button onClick={() => {/* markFertilized call */}} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700">
-                        <Sprout className="mr-2 h-4 w-4" /> Fertilized Today
-                      </Button>
-                    </div>
-                    <div className="flex gap-3 pointer-events-auto">
-                      <Button variant="outline" size="icon" onClick={() => {/* openEditModal(plant) */}} disabled={isDemoMode}>
+                    <div className="flex gap-3">
+                      <Button variant="outline" size="icon">
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" className="text-red-600" onClick={() => {/* deletePlant */}} disabled={isDemoMode}>
+                      <Button variant="outline" size="icon" className="text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
