@@ -19,6 +19,11 @@ import {
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
 import { WateringCalendar } from '@/components/WateringCalendar';
 import { uploadPlantImage, deletePlantImageFromStorage } from '@/lib/storage-upload';
+import {
+  datetimeLocalToIsoUtc,
+  defaultPhotoTimelineFromFile,
+  toDatetimeLocalValue,
+} from '@/lib/photo-timeline';
 import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -165,6 +170,8 @@ export default function LaveenGardenTracker() {
   const [editFertDays, setEditFertDays] = useState('');
   const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
   const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
+  const [newPhotoTimelineAt, setNewPhotoTimelineAt] = useState(() => toDatetimeLocalValue(new Date()));
+  const [editPhotoTimelineAt, setEditPhotoTimelineAt] = useState(() => toDatetimeLocalValue(new Date()));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -395,8 +402,13 @@ export default function LaveenGardenTracker() {
 
     if (!photoUrl) {
       toast.error('Photo upload failed');
+      e.target.value = '';
       return;
     }
+
+    const timelineDefault = defaultPhotoTimelineFromFile(file);
+    if (isEdit) setEditPhotoTimelineAt(timelineDefault);
+    else setNewPhotoTimelineAt(timelineDefault);
 
     if (photoUrl) {
       if (isEdit && editingPlant) {
@@ -411,16 +423,19 @@ export default function LaveenGardenTracker() {
       }
       toast.success('Photo uploaded successfully!');
     }
+    e.target.value = '';
   };
 
   const removePreview = (isEdit = false) => {
     if (isEdit) {
       if (editPreviewUrl) URL.revokeObjectURL(editPreviewUrl);
       setEditPreviewUrl(null);
+      setEditPhotoTimelineAt(toDatetimeLocalValue(new Date()));
       if (editingPlant) setEditingPlant({ ...editingPlant, photo_url: null });
     } else {
       if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
       setNewPreviewUrl(null);
+      setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
       setNewPlant({ ...newPlant, photo_url: null });
     }
   };
@@ -469,7 +484,12 @@ export default function LaveenGardenTracker() {
     if (error) toast.error('Failed to add plant');
     else {
       if (inserted?.id && row.photo_url) {
-        const { error: gErr } = await supabase.from('plant_photos').insert({ plant_id: inserted.id, photo_url: row.photo_url });
+        const createdIso = datetimeLocalToIsoUtc(newPhotoTimelineAt);
+        const { error: gErr } = await supabase.from('plant_photos').insert({
+          plant_id: inserted.id,
+          photo_url: row.photo_url,
+          ...(createdIso ? { created_at: createdIso } : {}),
+        });
         if (gErr) console.error('plant_photos insert:', gErr);
       }
       const addDetails = [
@@ -501,6 +521,7 @@ export default function LaveenGardenTracker() {
         photo_url: null,
       });
       setNewPreviewUrl(null);
+      setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
       fetchPlants();
       fetchActivities();
     }
@@ -529,9 +550,11 @@ export default function LaveenGardenTracker() {
         merged.photo_url &&
         merged.photo_url !== baseline
       ) {
+        const createdIso = datetimeLocalToIsoUtc(editPhotoTimelineAt);
         const { error: gErr } = await supabase.from('plant_photos').insert({
           plant_id: editingPlant.id,
           photo_url: merged.photo_url,
+          ...(createdIso ? { created_at: createdIso } : {}),
         });
         if (gErr) console.error('plant_photos insert:', gErr);
       }
@@ -552,6 +575,7 @@ export default function LaveenGardenTracker() {
       setIsEditModalOpen(false);
       setEditingPlant(null);
       setEditPreviewUrl(null);
+      setEditPhotoTimelineAt(toDatetimeLocalValue(new Date()));
       fetchPlants();
       fetchActivities();
     }
@@ -900,6 +924,23 @@ export default function LaveenGardenTracker() {
                         <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={() => removePreview(false)}>
                           <X className="h-4 w-4" />
                         </Button>
+                      </div>
+                    )}
+                    {(newPreviewUrl || newPlant.photo_url) && (
+                      <div className="mt-3 space-y-1.5">
+                        <Label htmlFor="new-photo-timeline">Photo date on timeline</Label>
+                        <p className="text-xs text-desert-dust dark:text-zinc-500">
+                          Shown on the plant profile history. We pre-fill from the file when the device provides it;
+                          change this if it&apos;s an older photo.
+                        </p>
+                        <Input
+                          id="new-photo-timeline"
+                          type="datetime-local"
+                          value={newPhotoTimelineAt}
+                          onChange={(e) => setNewPhotoTimelineAt(e.target.value)}
+                          disabled={isDemoMode}
+                          className="max-w-full sm:max-w-xs"
+                        />
                       </div>
                     )}
                   </div>
@@ -1400,6 +1441,22 @@ export default function LaveenGardenTracker() {
                     <Button type="button" variant="destructive" size="sm" className="absolute top-2 right-2" onClick={() => removePreview(true)}>
                       <X className="h-4 w-4" />
                     </Button>
+                  </div>
+                )}
+                {editPreviewUrl && (
+                  <div className="mt-3 space-y-1.5">
+                    <Label htmlFor="edit-photo-timeline">Photo date on timeline</Label>
+                    <p className="text-xs text-desert-dust dark:text-zinc-500">
+                      Used when you save — this shot is added to profile history with this timestamp.
+                    </p>
+                    <Input
+                      id="edit-photo-timeline"
+                      type="datetime-local"
+                      value={editPhotoTimelineAt}
+                      onChange={(e) => setEditPhotoTimelineAt(e.target.value)}
+                      disabled={isDemoMode}
+                      className="max-w-full sm:max-w-xs"
+                    />
                   </div>
                 )}
               </div>

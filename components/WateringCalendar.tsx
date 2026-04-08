@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Plant } from '@/lib/plant-types';
 import { buildWateringCalendar } from '@/lib/watering-calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, Droplet } from 'lucide-react';
+import { CalendarDays, ChevronDown, Droplet } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -16,26 +16,60 @@ type Props = {
 };
 
 export function WateringCalendar({ plants, numDays = 14 }: Props) {
+  const [open, setOpen] = useState(true);
   const rows = useMemo(() => buildWateringCalendar(plants, numDays), [plants, numDays]);
   const today = useMemo(() => new Date(), []);
 
   if (plants.length === 0) return null;
 
   const rangeLabel = `${format(rows[0]?.at ?? today, 'MMM d')} – ${format(rows[rows.length - 1]?.at ?? today, 'MMM d, yyyy')}`;
+  const daysWithPlants = rows.filter((r) => r.plants.length > 0).length;
 
   return (
     <Card className="mb-10 border-sky-800/20 bg-gradient-to-br from-sky-50/90 to-desert-parchment dark:from-sky-950/35 dark:to-zinc-900 dark:border-sky-900/40">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <CalendarDays className="h-5 w-5 text-sky-600 dark:text-sky-400" />
-          Watering — next {numDays} days
-        </CardTitle>
-        <p className="text-sm text-desert-dust dark:text-zinc-400">
-          Based on each plant’s last watered date and water-every interval. {rangeLabel}. If a plant had no last
-          watered date, it shows on the first day only — set dates on the plant or profile after you water.
-        </p>
+      <CardHeader className="pb-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-start justify-between gap-3 rounded-xl text-left outline-none transition-colors hover:bg-sky-100/50 focus-visible:ring-2 focus-visible:ring-sky-500/40 dark:hover:bg-sky-950/30 -m-2 p-2"
+          aria-expanded={open}
+          aria-controls="watering-calendar-panel"
+          id="watering-calendar-toggle"
+        >
+          <div className="min-w-0 flex-1 space-y-1">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <CalendarDays className="h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
+              Watering — next {numDays} days
+            </CardTitle>
+            {open ? (
+              <p className="text-sm text-desert-dust dark:text-zinc-400">
+                Based on each plant’s last watered date and water-every interval. {rangeLabel}. If a plant had no
+                last watered date, it shows on the first day only — set dates on the plant or profile after you
+                water.
+              </p>
+            ) : (
+              <p className="text-sm text-desert-dust dark:text-zinc-500">
+                {rangeLabel}
+                {daysWithPlants > 0 ? (
+                  <span className="text-desert-sage dark:text-zinc-400">
+                    {' '}
+                    · {daysWithPlants} day{daysWithPlants === 1 ? '' : 's'} with plants due
+                  </span>
+                ) : null}
+              </p>
+            )}
+          </div>
+          <ChevronDown
+            className={cn(
+              'mt-1 h-5 w-5 shrink-0 text-desert-dust transition-transform dark:text-zinc-400',
+              open && 'rotate-180',
+            )}
+            aria-hidden
+          />
+        </button>
       </CardHeader>
-      <CardContent className="space-y-2">
+      {open ? (
+        <CardContent id="watering-calendar-panel" role="region" aria-labelledby="watering-calendar-toggle" className="space-y-2 pt-0">
         {rows.map((row) => {
           const isToday = isSameDay(row.at, today);
           return (
@@ -88,7 +122,8 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
             </div>
           );
         })}
-      </CardContent>
+        </CardContent>
+      ) : null}
     </Card>
   );
 }

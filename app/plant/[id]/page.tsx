@@ -15,8 +15,11 @@ import {
 } from '@/lib/fertilizer-schedule';
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
 import { deletePlantImageFromStorage } from '@/lib/storage-upload';
+import { datetimeLocalToIsoUtc, toDatetimeLocalValue } from '@/lib/photo-timeline';
 import { getGardenMode } from '@/lib/garden-session';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -34,6 +37,7 @@ import {
   Square,
   NotebookPen,
   Sun,
+  CalendarClock,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { addDays } from 'date-fns';
@@ -104,6 +108,8 @@ export default function PlantProfile() {
   const [newNoteText, setNewNoteText] = useState('');
   const [noteAddBusy, setNoteAddBusy] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [photoDateDialog, setPhotoDateDialog] = useState<{ id: string; datetimeLocal: string } | null>(null);
+  const [photoDateSaving, setPhotoDateSaving] = useState(false);
 
   useEffect(() => {
     setIsWriteDisabled(getGardenMode() === 'demo');
@@ -440,6 +446,32 @@ export default function PlantProfile() {
     }
   };
 
+  const savePhotoTimelineDate = async () => {
+    if (!photoDateDialog || isWriteDisabled) return;
+    const iso = datetimeLocalToIsoUtc(photoDateDialog.datetimeLocal);
+    if (!iso) {
+      toast.error('Invalid date');
+      return;
+    }
+    setPhotoDateSaving(true);
+    try {
+      const { error } = await supabase
+        .from('plant_photos')
+        .update({ created_at: iso })
+        .eq('id', photoDateDialog.id)
+        .eq('plant_id', plantId);
+      if (error) throw error;
+      toast.success('Photo date updated');
+      setPhotoDateDialog(null);
+      await fetchPhotos();
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not update photo date');
+    } finally {
+      setPhotoDateSaving(false);
+    }
+  };
+
   const setAsProfilePicture = async (photoUrl: string) => {
     setSettingProfileForUrl(photoUrl);
     try {
@@ -661,6 +693,22 @@ export default function PlantProfile() {
                             <Star className={cn('h-4 w-4', isProfile && 'fill-amber-400 text-amber-600')} />
                           )}
                           {isProfile ? 'Current profile photo' : 'Use as profile photo'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 w-full justify-center gap-1.5 rounded-lg text-xs sm:text-sm"
+                          disabled={isWriteDisabled}
+                          onClick={() =>
+                            setPhotoDateDialog({
+                              id: photo.id,
+                              datetimeLocal: toDatetimeLocalValue(new Date(photo.created_at)),
+                            })
+                          }
+                        >
+                          <CalendarClock className="h-4 w-4" />
+                          Set photo date
                         </Button>
                         <Button
                           type="button"
@@ -1047,6 +1095,50 @@ export default function PlantProfile() {
           </CardContent>
         </Card>
       </main>
+
+      <Dialog
+        open={!!photoDateDialog}
+        onOpenChange={(open) => {
+          if (!open) setPhotoDateDialog(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Set photo date</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-desert-dust dark:text-zinc-500">
+            Timeline order on this profile uses this time — useful for older shots from your camera roll.
+          </p>
+          <div className="space-y-2 pt-2">
+            <Label htmlFor="photo-date-dialog-input">Date and time</Label>
+            <Input
+              id="photo-date-dialog-input"
+              type="datetime-local"
+              value={photoDateDialog?.datetimeLocal ?? ''}
+              onChange={(e) =>
+                setPhotoDateDialog((prev) =>
+                  prev ? { ...prev, datetimeLocal: e.target.value } : null,
+                )
+              }
+              disabled={isWriteDisabled}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => setPhotoDateDialog(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="bg-oasis hover:bg-oasis-hover dark:bg-emerald-600"
+                onClick={() => void savePhotoTimelineDate()}
+                disabled={isWriteDisabled || photoDateSaving}
+              >
+                {photoDateSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
