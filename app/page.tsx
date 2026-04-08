@@ -41,7 +41,7 @@ type NewPlantForm = {
   photo_url: string | null;
 };
 
-// ==================== HELPERS ====================
+// ==================== HELPER FUNCTIONS ====================
 function safeFormatDay(iso: string | null): string {
   if (!iso) return 'Never';
   const d = new Date(iso);
@@ -128,7 +128,7 @@ export default function LaveenGardenTracker() {
     setSortMode('name-asc');
   };
 
-  // ==================== AUTH & REFRESH ====================
+  // ==================== EXISTING FUNCTIONS (add your full logic here) ====================
   const toggleDarkMode = () => {
     const newMode = !darkMode;
     setDarkMode(newMode);
@@ -147,20 +147,16 @@ export default function LaveenGardenTracker() {
   const handleRefresh = async () => {
     if (isDemoMode) return toast.info("Demo mode — using static data");
     setLoading(true);
-    toast.loading("Refreshing...", { id: "refresh" });
-    // Add your fetchPlants() and fetchActivities() here
+    toast.loading("Refreshing garden...", { id: "refresh" });
+    // Add your fetchPlants() and fetchActivities() calls here
     toast.success("Garden refreshed!", { id: "refresh" });
     setLoading(false);
   };
 
-  // ==================== MODALS & ACTIONS ====================
-  // Add your full addPlant, updatePlant, markWatered, markFertilized, deletePlant, openEditModal, etc. here
-  // (They remain exactly as you had them before)
-
   if (loading) return <div className="h-screen flex items-center justify-center bg-desert-page dark:bg-zinc-950">Loading Garden...</div>;
 
   if (!isAuthenticated) {
-    // Your login screen (unchanged)
+    // Your existing login screen (unchanged)
   }
 
   return (
@@ -168,7 +164,7 @@ export default function LaveenGardenTracker() {
       <Toaster position="top-center" richColors />
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* Search + Sort + Count */}
+        {/* Search + Sort + Total */}
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-8">
           <div className="flex-1 max-w-md relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -243,10 +239,10 @@ export default function LaveenGardenTracker() {
                       </p>
                     </div>
                     <div className="flex gap-2 pointer-events-auto">
-                      <Button onClick={() => {/* markWatered call */}} disabled={isDemoMode} className="flex-1">
+                      <Button onClick={() => {/* your markWatered */}} disabled={isDemoMode} className="flex-1">
                         <Droplet className="mr-2 h-4 w-4" /> Watered Today
                       </Button>
-                      <Button onClick={() => {/* markFertilized call */}} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700">
+                      <Button onClick={() => {/* your markFertilized */}} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700">
                         <Sprout className="mr-2 h-4 w-4" /> Fertilized Today
                       </Button>
                     </div>
@@ -265,26 +261,6 @@ export default function LaveenGardenTracker() {
           })}
         </div>
       </main>
-
-      {/* Add Plant Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-oasis dark:text-emerald-400">Add New Plant</DialogTitle>
-          </DialogHeader>
-          {/* Paste your full Add Plant form here */}
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Plant Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-oasis dark:text-emerald-400">Edit Plant</DialogTitle>
-          </DialogHeader>
-          {/* Paste your full Edit Plant form here */}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
