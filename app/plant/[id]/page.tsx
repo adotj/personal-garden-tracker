@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import type { Plant } from '@/lib/plant-types';
 import { deletePlantImageFromStorage } from '@/lib/storage-upload';
@@ -10,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast, Toaster } from 'sonner';
-import { ArrowLeft, Trash2, Loader2, Droplet, Sprout, Calendar, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Trash2, Loader2, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function PlantProfile() {
@@ -44,6 +43,7 @@ export default function PlantProfile() {
       return;
     }
     setPlant(data);
+    setLoading(false);
   };
 
   const fetchPhotos = async () => {
@@ -72,14 +72,14 @@ export default function PlantProfile() {
     setDeletingId(photoId);
 
     try {
-      // 1. Delete from storage
-      const storageSuccess = await deletePlantImageFromStorage(photoUrl);
-      if (!storageSuccess) {
+      const storageError = await deletePlantImageFromStorage(photoUrl);
+
+      if (storageError) {
+        console.error('Storage delete failed:', storageError);
         toast.error('Failed to delete image from storage');
         return;
       }
 
-      // 2. Delete from plant_photos table
       const { error: dbError } = await supabase
         .from('plant_photos')
         .delete()
@@ -87,17 +87,12 @@ export default function PlantProfile() {
 
       if (dbError) throw dbError;
 
-      // 3. If this was the homepage photo, clear it
+      // If this was the homepage photo, clear it
       if (plant?.photo_url === photoUrl) {
-        await supabase
-          .from('plants')
-          .update({ photo_url: null })
-          .eq('id', plantId);
-        
+        await supabase.from('plants').update({ photo_url: null }).eq('id', plantId);
         setPlant(prev => prev ? { ...prev, photo_url: null } : null);
       }
 
-      // Update UI
       setPhotos(prev => prev.filter(p => p.id !== photoId));
       toast.success('Photo deleted successfully');
 
@@ -109,11 +104,17 @@ export default function PlantProfile() {
     }
   };
 
-  if (loading && !plant) {
-    return <div className="min-h-screen flex items-center justify-center">Loading plant profile...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-desert-page dark:bg-zinc-950">
+        Loading plant profile...
+      </div>
+    );
   }
 
-  if (!plant) return <div>Plant not found</div>;
+  if (!plant) {
+    return <div className="min-h-screen flex items-center justify-center">Plant not found</div>;
+  }
 
   return (
     <div className="min-h-screen bg-desert-page dark:bg-zinc-950 text-desert-ink dark:text-white">
@@ -165,7 +166,6 @@ export default function PlantProfile() {
             <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
               <CardContent className="py-12 text-center">
                 <p className="text-desert-dust dark:text-zinc-500">No additional photos yet.</p>
-                <p className="text-xs mt-2">Upload more photos from the edit modal on the dashboard.</p>
               </CardContent>
             </Card>
           ) : (
@@ -206,7 +206,7 @@ export default function PlantProfile() {
           )}
         </div>
 
-        {/* Growth & Activity History */}
+        {/* Activity History */}
         <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -227,7 +227,6 @@ export default function PlantProfile() {
                   >
                     <div className="flex-1">
                       <div className="font-medium text-lg">{log.action}</div>
-                      {log.details && <p className="text-sm text-desert-sage mt-1">{log.details}</p>}
                     </div>
                     <div className="text-right text-xs text-desert-dust dark:text-zinc-500 whitespace-nowrap ml-4">
                       {format(new Date(log.created_at), 'MMM d, h:mm a')}
