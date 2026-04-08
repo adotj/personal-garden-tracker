@@ -3,13 +3,23 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Plant } from '@/lib/plant-types';
+import type { FertilizerSeason, FertilizerLogRow, Plant } from '@/lib/plant-types';
 import { normalizePlantRow } from '@/lib/plant-helpers';
+import {
+  ALL_FERTILIZER_SEASONS,
+  fertilizerUrgency,
+  formatNextFertilizationDue,
+  normalizeFertilizerSeasons,
+  seasonLabel,
+} from '@/lib/fertilizer-schedule';
+import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
 import { deletePlantImageFromStorage } from '@/lib/storage-upload';
 import { getGardenMode } from '@/lib/garden-session';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { toast, Toaster } from 'sonner';
 import { ArrowLeft, Trash2, Loader2, Image as ImageIcon, Droplet, Sprout, Star, CheckSquare, Square } from 'lucide-react';
 import { format, isValid } from 'date-fns';
@@ -71,6 +81,12 @@ export default function PlantProfile() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [careBusy, setCareBusy] = useState<'water' | 'fert' | null>(null);
   const [isWriteDisabled, setIsWriteDisabled] = useState(false);
+  const [fertilizerLogs, setFertilizerLogs] = useState<FertilizerLogRow[]>([]);
+  const [fertDraft, setFertDraft] = useState<{ seasons: FertilizerSeason[]; notes: string }>({
+    seasons: [...ALL_FERTILIZER_SEASONS],
+    notes: '',
+  });
+  const [fertSettingsBusy, setFertSettingsBusy] = useState(false);
 
   useEffect(() => {
     setIsWriteDisabled(getGardenMode() === 'demo');
@@ -116,6 +132,21 @@ export default function PlantProfile() {
     },
     [],
   );
+
+  const fetchFertilizerLogs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('fertilizer_logs')
+      .select('*')
+      .eq('plant_id', plantId)
+      .order('applied_on', { ascending: false })
+      .limit(80);
+    if (error) {
+      console.warn('fertilizer_logs:', error.message);
+      setFertilizerLogs([]);
+      return;
+    }
+    setFertilizerLogs((data || []) as FertilizerLogRow[]);
+  }, [plantId]);
 
   const logActivityDb = async (action: string, plantName: string) => {
     await supabase.from('activity_logs').insert([{ action, plant_name: plantName }]);
@@ -171,13 +202,42 @@ export default function PlantProfile() {
       }
 
       toast.success(`${plant.name} fertilized`);
+      const { error: fertLogErr } = await supabase.from('fertilizer_logs').insert({
+        plant_id: plantId,
+        applied_on: fertilizedDate,
+        notes: null,
+      });
+      if (fertLogErr) console.warn('fertilizer_logs insert:', fertLogErr);
       await fetchPlant();
+      await fetchFertilizerLogs();
       await fetchActivities(plant.name);
     } catch (e) {
       console.error(e);
       toast.error('Could not update fertilizing');
     } finally {
       setCareBusy(null);
+    }
+  };
+
+  const saveFertilizerSettings = async () => {
+    if (!plant || isWriteDisabled) return;
+    setFertSettingsBusy(true);
+    try {
+      const { error } = await supabase
+        .from('plants')
+        .update({
+          fertilizer_seasons: normalizeFertilizerSeasons(fertDraft.seasons),
+          fertilizer_notes: fertDraft.notes.trim() || null,
+        })
+        .eq('id', plantId);
+      if (error) throw error;
+      toast.success('Fertilizer schedule saved');
+      await fetchPlant();
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not save fertilizer settings');
+    } finally {
+      setFertSettingsBusy(false);
     }
   };
 
@@ -189,13 +249,23 @@ export default function PlantProfile() {
       const p = await fetchPlant();
       if (cancelled) return;
       await fetchPhotos();
+      if (cancelled) return;
+      await fetchFertilizerLogs();
       if (cancelled || !p?.name) return;
       await fetchActivities(p.name);
     })();
     return () => {
       cancelled = true;
     };
-  }, [plantId, fetchPlant, fetchPhotos, fetchActivities]);
+  }, [plantId, fetchPlant, fetchPhotos, fetchFertilizerLogs, fetchActivities]);
+
+  useEffect(() => {
+    if (!plant) return;
+    setFertDraft({
+      seasons: normalizeFertilizerSeasons(plant.fertilizer_seasons),
+      notes: plant.fertilizer_notes ?? '',
+    });
+  }, [plant?.id]);
 
   const togglePhotoSelected = (id: string) => {
     setSelectedPhotoIds((prev) => {
@@ -322,6 +392,12 @@ export default function PlantProfile() {
     return <div className="min-h-screen flex items-center justify-center">Plant not found</div>;
   }
 
+  const fertU = fertilizerUrgency(plant);
+  const plantSeasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
+  const fertDraftMatchesPlant =
+    JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
+    (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
+
   return (
     <div className="min-h-screen bg-desert-page dark:bg-zinc-950 text-desert-ink dark:text-white">
       <Toaster position="top-center" richColors />
@@ -365,7 +441,7 @@ export default function PlantProfile() {
               </div>
               <div className="flex gap-3 rounded-2xl border border-desert-mist/80 bg-white/50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
                 <Sprout className="h-8 w-8 shrink-0 text-amber-700 dark:text-amber-400" />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust dark:text-zinc-500">
                     Last fertilized
                   </p>
@@ -374,9 +450,38 @@ export default function PlantProfile() {
                   </p>
                   <p className="text-sm text-desert-sage dark:text-zinc-400">
                     Every {plant.fertilizer_frequency_days} day
-                    {plant.fertilizer_frequency_days === 1 ? '' : 's'} ·{' '}
-                    {formatDueLine(plant.last_fertilized, plant.fertilizer_frequency_days) || '—'}
+                    {plant.fertilizer_frequency_days === 1 ? '' : 's'} · Next (in active seasons):{' '}
+                    <span
+                      className={cn(
+                        fertU === 'overdue' || fertU === 'due_soon'
+                          ? 'font-medium text-orange-600 dark:text-orange-400'
+                          : '',
+                      )}
+                    >
+                      {formatNextFertilizationDue(plant)}
+                    </span>
                   </p>
+                  <p className="text-xs text-desert-dust dark:text-zinc-500">
+                    Fertilize in: {plantSeasons.map(seasonLabel).join(', ')}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {fertU === 'off_season' ? (
+                      <Badge variant="secondary" className="text-xs font-normal">
+                        Fertilizer off-season
+                      </Badge>
+                    ) : null}
+                    {fertU === 'overdue' ? (
+                      <Badge className="bg-red-600 text-white hover:bg-red-600 text-xs">Needs fertilizer now</Badge>
+                    ) : null}
+                    {fertU === 'due_soon' ? (
+                      <Badge className="bg-amber-600 text-white hover:bg-amber-600 text-xs">Due within a week</Badge>
+                    ) : null}
+                    {fertU === 'due_month' ? (
+                      <Badge variant="outline" className="border-amber-600 text-amber-800 dark:text-amber-300 text-xs">
+                        Due this month
+                      </Badge>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -411,6 +516,89 @@ export default function PlantProfile() {
                 <p className="w-full text-xs text-amber-700 dark:text-amber-400">Demo mode — care actions are disabled.</p>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Sprout className="h-5 w-5 text-amber-600" />
+              Fertilizer schedule
+            </CardTitle>
+            <p className="text-sm text-desert-dust dark:text-zinc-500">
+              Seasons use a simple Northern Hemisphere calendar (e.g. spring = Mar–May). The next due date only
+              counts during the seasons you enable.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="mb-2 block">Active seasons</Label>
+              <FertilizerSeasonCheckboxes
+                idPrefix="profile-fert-season"
+                value={fertDraft.seasons}
+                onChange={(seasons) => setFertDraft((d) => ({ ...d, seasons }))}
+                disabled={isWriteDisabled}
+              />
+            </div>
+            <div>
+              <Label htmlFor="profile-fert-notes">Notes</Label>
+              <Textarea
+                id="profile-fert-notes"
+                value={fertDraft.notes}
+                onChange={(e) => setFertDraft((d) => ({ ...d, notes: e.target.value }))}
+                className="mt-1 min-h-[88px]"
+                placeholder="e.g. 10-10-10 balanced, half strength"
+                disabled={isWriteDisabled}
+              />
+            </div>
+            <Button
+              type="button"
+              className="rounded-full bg-amber-700 hover:bg-amber-800 text-white"
+              disabled={isWriteDisabled || fertSettingsBusy || fertDraftMatchesPlant}
+              onClick={() => void saveFertilizerSettings()}
+            >
+              {fertSettingsBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save fertilizer settings
+            </Button>
+            {isWriteDisabled ? (
+              <p className="text-xs text-amber-700 dark:text-amber-400">Demo mode — editing is disabled.</p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Sprout className="h-5 w-5 text-amber-600" />
+              Fertilizer history
+            </CardTitle>
+            <p className="text-sm text-desert-dust dark:text-zinc-500">
+              Recorded when you tap “Fertilized today” here or on the dashboard (after the fertilizer log table
+              exists in your database).
+            </p>
+          </CardHeader>
+          <CardContent>
+            {fertilizerLogs.length === 0 ? (
+              <p className="py-8 text-center text-desert-dust dark:text-zinc-500">
+                No fertilizer applications logged yet.
+              </p>
+            ) : (
+              <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {fertilizerLogs.map((row) => (
+                  <li
+                    key={row.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist/60 bg-white/60 px-4 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-800/50"
+                  >
+                    <span className="font-medium text-desert-ink dark:text-zinc-100">
+                      {formatCareDay(row.applied_on)}
+                    </span>
+                    {row.notes ? (
+                      <span className="text-xs text-desert-sage dark:text-zinc-400">{row.notes}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 

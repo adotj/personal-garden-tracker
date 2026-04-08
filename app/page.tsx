@@ -3,8 +3,18 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
-import type { Plant } from '@/lib/plant-types';
+import type { FertilizerSeason, Plant } from '@/lib/plant-types';
 import { normalizePlantRow, plantUpdatePayload } from '@/lib/plant-helpers';
+import {
+  ALL_FERTILIZER_SEASONS,
+  computeNextFertilizationDue,
+  fertilizerDueSoonOrOverdue,
+  fertilizerUrgency,
+  formatNextFertilizationDue,
+  needsFertilizerThisMonth,
+  seasonLabel,
+} from '@/lib/fertilizer-schedule';
+import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
 import { uploadPlantImage, deletePlantImageFromStorage } from '@/lib/storage-upload';
 import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,8 +23,9 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout, Search } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout, Search, CalendarRange } from 'lucide-react';
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
@@ -38,6 +49,8 @@ type NewPlantForm = {
   fertilizer_frequency_days: number | '';
   last_watered: string;
   last_fertilized: string;
+  fertilizer_seasons: FertilizerSeason[];
+  fertilizer_notes: string;
   notes: string;
   location_in_garden: string;
   photo_url: string | null;
@@ -64,15 +77,6 @@ function waterDueSoon(plant: Plant): boolean {
   const due = addDays(last, freq);
   if (!isValid(last) || !isValid(due)) return true;
   return differenceInDays(due, new Date()) <= 2;
-}
-
-function fertDueSoon(plant: Plant): boolean {
-  if (!plant.last_fertilized) return true;
-  const freq = plant.fertilizer_frequency_days || 30;
-  const last = new Date(plant.last_fertilized);
-  const due = addDays(last, freq);
-  if (!isValid(last) || !isValid(due)) return true;
-  return differenceInDays(due, new Date()) <= 7;
 }
 
 function getWeatherCondition(code: number): string {
@@ -110,12 +114,15 @@ export default function LaveenGardenTracker() {
   const [darkMode, setDarkMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [plantSearch, setPlantSearch] = useState('');
+  const [fertDueThisMonthOnly, setFertDueThisMonthOnly] = useState(false);
   const editPhotoBaselineRef = useRef<string | null>(null);
 
   const [newPlant, setNewPlant] = useState<NewPlantForm>({
     name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
     watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
     fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],
+    fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
+    fertilizer_notes: '',
     notes: '', location_in_garden: '', photo_url: null as string | null,
   });
   const [editWaterDays, setEditWaterDays] = useState('');
@@ -183,9 +190,45 @@ export default function LaveenGardenTracker() {
 
   const loadDemoPlants = () => {
     const demoPlants: Plant[] = [
-      { id: 'demo1', name: 'Demo Desert Rose', container_type: 'Pot', pot_size: '10gal', watering_frequency_days: 7, last_watered: '2026-04-01', fertilizer_frequency_days: 30, last_fertilized: '2026-03-15', photo_url: null },
-      { id: 'demo2', name: 'Demo Saguaro', container_type: 'Grow Bag', pot_size: '10 gallon', watering_frequency_days: 14, last_watered: '2026-03-25', fertilizer_frequency_days: 60, last_fertilized: '2026-02-01', photo_url: null },
-      { id: 'demo3', name: 'Demo Prickly Pear', container_type: 'Raised Bed', pot_size: 'Large', watering_frequency_days: 10, last_watered: '2026-04-03', fertilizer_frequency_days: 45, last_fertilized: '2026-03-20', photo_url: null },
+      {
+        id: 'demo1',
+        name: 'Demo Desert Rose',
+        container_type: 'Pot',
+        pot_size: '10gal',
+        watering_frequency_days: 7,
+        last_watered: '2026-04-01',
+        fertilizer_frequency_days: 30,
+        last_fertilized: '2026-03-15',
+        fertilizer_seasons: ['spring', 'summer'],
+        fertilizer_notes: 'Bloom booster in spring',
+        photo_url: null,
+      },
+      {
+        id: 'demo2',
+        name: 'Demo Saguaro',
+        container_type: 'Grow Bag',
+        pot_size: '10 gallon',
+        watering_frequency_days: 14,
+        last_watered: '2026-03-25',
+        fertilizer_frequency_days: 60,
+        last_fertilized: '2026-02-01',
+        fertilizer_seasons: ['summer'],
+        fertilizer_notes: 'Light feed; dormant in winter',
+        photo_url: null,
+      },
+      {
+        id: 'demo3',
+        name: 'Demo Prickly Pear',
+        container_type: 'Raised Bed',
+        pot_size: 'Large',
+        watering_frequency_days: 10,
+        last_watered: '2026-04-03',
+        fertilizer_frequency_days: 45,
+        last_fertilized: '2026-03-20',
+        fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
+        fertilizer_notes: null,
+        photo_url: null,
+      },
     ];
     setPlants(demoPlants);
   };
@@ -266,11 +309,32 @@ export default function LaveenGardenTracker() {
 
   const plantSearchNorm = plantSearch.trim().toLowerCase();
   const filteredPlants = useMemo(() => {
-    if (!plantSearchNorm) return plants;
-    return plants.filter((p) => p.name.toLowerCase().includes(plantSearchNorm));
-  }, [plants, plantSearchNorm]);
+    let list = plants;
+    if (plantSearchNorm) list = list.filter((p) => p.name.toLowerCase().includes(plantSearchNorm));
+    if (fertDueThisMonthOnly) list = list.filter((p) => needsFertilizerThisMonth(p));
+    return list;
+  }, [plants, plantSearchNorm, fertDueThisMonthOnly]);
 
   const totalPlantCount = plants.length;
+
+  const fertilizerUpcoming = useMemo(() => {
+    const now = new Date();
+    return plants
+      .map((plant) => ({
+        plant,
+        urgency: fertilizerUrgency(plant, now),
+        next: computeNextFertilizationDue(plant, now),
+      }))
+      .filter(
+        (x) =>
+          x.urgency === 'overdue' || x.urgency === 'due_soon' || x.urgency === 'due_month',
+      )
+      .sort((a, b) => {
+        const ta = a.next?.getTime() ?? 0;
+        const tb = b.next?.getTime() ?? 0;
+        return ta - tb;
+      });
+  }, [plants]);
 
   const logActivity = async (action: string, plant_name?: string) => {
     if (isWriteDisabled) return;
@@ -349,7 +413,15 @@ export default function LaveenGardenTracker() {
       newPlant.fertilizer_frequency_days === ''
         ? 30
         : Math.max(1, Number(newPlant.fertilizer_frequency_days));
-    const row = { ...newPlant, watering_frequency_days: waterDays, fertilizer_frequency_days: fertDays };
+    const seasons =
+      newPlant.fertilizer_seasons?.length > 0 ? newPlant.fertilizer_seasons : [...ALL_FERTILIZER_SEASONS];
+    const row = {
+      ...newPlant,
+      watering_frequency_days: waterDays,
+      fertilizer_frequency_days: fertDays,
+      fertilizer_seasons: seasons,
+      fertilizer_notes: newPlant.fertilizer_notes.trim() || null,
+    };
     const { data: inserted, error } = await supabase.from('plants').insert([row]).select('id').single();
     if (error) toast.error('Failed to add plant');
     else {
@@ -361,7 +433,21 @@ export default function LaveenGardenTracker() {
       toast.success('Plant added successfully! 🌱');
       if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
       setIsAddModalOpen(false);
-      setNewPlant({ name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon', watering_frequency_days: 3, fertilizer_frequency_days: 30, last_watered: new Date().toISOString().split('T')[0], last_fertilized: new Date().toISOString().split('T')[0], notes: '', location_in_garden: '', photo_url: null });
+      setNewPlant({
+        name: '',
+        species: '',
+        container_type: 'Grow Bag',
+        pot_size: '10 gallon',
+        watering_frequency_days: 3,
+        fertilizer_frequency_days: 30,
+        last_watered: new Date().toISOString().split('T')[0],
+        last_fertilized: new Date().toISOString().split('T')[0],
+        fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
+        fertilizer_notes: '',
+        notes: '',
+        location_in_garden: '',
+        photo_url: null,
+      });
       setNewPreviewUrl(null);
       fetchPlants();
       fetchActivities();
@@ -452,6 +538,12 @@ export default function LaveenGardenTracker() {
     setPlants((prev) =>
       prev.map((p) => (p.id === id ? { ...p, last_fertilized: fertilizedDate } : p)),
     );
+    const { error: fertLogErr } = await supabase.from('fertilizer_logs').insert({
+      plant_id: id,
+      applied_on: fertilizedDate,
+      notes: null,
+    });
+    if (fertLogErr) console.warn('fertilizer_logs insert:', fertLogErr);
     await fetchPlants();
     await fetchActivities();
   };
@@ -573,7 +665,7 @@ export default function LaveenGardenTracker() {
                   <Plus className="h-4 w-4 mr-1" /> New Plant
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="max-h-[min(90vh,720px)] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle className="text-oasis dark:text-emerald-400">Add New Plant</DialogTitle>
                 </DialogHeader>
@@ -649,6 +741,46 @@ export default function LaveenGardenTracker() {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Last watered</Label>
+                      <Input
+                        type="date"
+                        value={newPlant.last_watered}
+                        onChange={(e) => setNewPlant({ ...newPlant, last_watered: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Last fertilized</Label>
+                      <Input
+                        type="date"
+                        value={newPlant.last_fertilized}
+                        onChange={(e) => setNewPlant({ ...newPlant, last_fertilized: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="mb-2 block">Fertilizer seasons (Northern Hemisphere)</Label>
+                    <p className="text-xs text-desert-dust dark:text-zinc-500 mb-2">
+                      Fertilizing is only scheduled in checked seasons; other months are treated as off-season.
+                    </p>
+                    <FertilizerSeasonCheckboxes
+                      value={newPlant.fertilizer_seasons}
+                      onChange={(fertilizer_seasons) => setNewPlant({ ...newPlant, fertilizer_seasons })}
+                      disabled={isDemoMode}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="new-fert-notes">Fertilizer notes (optional)</Label>
+                    <Textarea
+                      id="new-fert-notes"
+                      value={newPlant.fertilizer_notes}
+                      onChange={(e) => setNewPlant({ ...newPlant, fertilizer_notes: e.target.value })}
+                      placeholder="e.g. 10-10-10 balanced, half strength"
+                      className="mt-1 min-h-[72px] resize-y"
+                      disabled={isDemoMode}
+                    />
+                  </div>
                   <div>
                     <Label>Homepage photo (optional)</Label>
                     <p className="text-xs text-desert-dust dark:text-zinc-500 mb-2">Shown on the garden grid; add more on the plant profile.</p>
@@ -688,43 +820,58 @@ export default function LaveenGardenTracker() {
               </span>
             </div>
 
-            <div className="relative w-full min-w-0 sm:max-w-md">
-              <label htmlFor="garden-plant-filter" className="sr-only">
-                Search plants by name
-              </label>
-              <Search
-                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-desert-dust opacity-80 dark:text-zinc-500"
-                aria-hidden
-              />
-              <input
-                id="garden-plant-filter"
-                name="garden-plant-filter"
-                type="search"
-                value={plantSearch}
-                onChange={(e) => setPlantSearch(e.target.value)}
-                placeholder="Search plants by name…"
-                autoComplete="off"
-                spellCheck={false}
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
+              <Button
+                type="button"
+                variant={fertDueThisMonthOnly ? 'default' : 'outline'}
+                size="sm"
                 className={cn(
-                  'h-10 w-full rounded-full border border-desert-border/50 bg-desert-parchment/70 pl-10 text-sm text-desert-ink shadow-sm',
-                  'placeholder:text-desert-dust/65',
-                  'transition-[box-shadow,border-color] duration-200',
-                  'focus:border-oasis focus:outline-none focus:ring-2 focus:ring-oasis/25',
-                  'dark:border-zinc-600 dark:bg-zinc-950/45 dark:text-zinc-100 dark:placeholder:text-zinc-500',
-                  'dark:focus:border-emerald-500 dark:focus:ring-emerald-500/25',
-                  plantSearch.length > 0 ? 'pr-11' : 'pr-4',
+                  'h-10 shrink-0 rounded-full px-3 text-xs sm:text-sm',
+                  fertDueThisMonthOnly && 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600',
                 )}
-              />
-              {plantSearch.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setPlantSearch('')}
-                  className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-desert-dust transition-colors hover:bg-desert-mist/60 hover:text-desert-ink dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                  aria-label="Clear search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              ) : null}
+                onClick={() => setFertDueThisMonthOnly((v) => !v)}
+              >
+                <CalendarRange className="mr-1.5 h-4 w-4" />
+                Due this month
+              </Button>
+              <div className="relative min-w-0 flex-1">
+                <label htmlFor="garden-plant-filter" className="sr-only">
+                  Search plants by name
+                </label>
+                <Search
+                  className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-desert-dust opacity-80 dark:text-zinc-500"
+                  aria-hidden
+                />
+                <input
+                  id="garden-plant-filter"
+                  name="garden-plant-filter"
+                  type="search"
+                  value={plantSearch}
+                  onChange={(e) => setPlantSearch(e.target.value)}
+                  placeholder="Search plants by name…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className={cn(
+                    'h-10 w-full rounded-full border border-desert-border/50 bg-desert-parchment/70 pl-10 text-sm text-desert-ink shadow-sm',
+                    'placeholder:text-desert-dust/65',
+                    'transition-[box-shadow,border-color] duration-200',
+                    'focus:border-oasis focus:outline-none focus:ring-2 focus:ring-oasis/25',
+                    'dark:border-zinc-600 dark:bg-zinc-950/45 dark:text-zinc-100 dark:placeholder:text-zinc-500',
+                    'dark:focus:border-emerald-500 dark:focus:ring-emerald-500/25',
+                    plantSearch.length > 0 ? 'pr-11' : 'pr-4',
+                  )}
+                />
+                {plantSearch.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setPlantSearch('')}
+                    className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-desert-dust transition-colors hover:bg-desert-mist/60 hover:text-desert-ink dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -758,6 +905,54 @@ export default function LaveenGardenTracker() {
           </div>
         )}
 
+        {plants.length > 0 && fertilizerUpcoming.length > 0 ? (
+          <Card className="mb-10 border-amber-700/30 bg-gradient-to-br from-amber-50/90 to-desert-parchment dark:from-amber-950/40 dark:to-zinc-900 dark:border-amber-900/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Sprout className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                Fertilizer — coming up
+              </CardTitle>
+              <p className="text-sm text-desert-dust dark:text-zinc-400">
+                Only counts months you marked as fertilizer seasons. Northern Hemisphere: winter Dec–Feb, spring
+                Mar–May, summer Jun–Aug, fall Sep–Nov.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {(['overdue', 'due_soon', 'due_month'] as const).map((bucket) => {
+                const slice = fertilizerUpcoming.filter((x) => x.urgency === bucket);
+                if (slice.length === 0) return null;
+                const title =
+                  bucket === 'overdue'
+                    ? 'Overdue'
+                    : bucket === 'due_soon'
+                      ? 'Due within 7 days'
+                      : 'Due later this month';
+                return (
+                  <div key={bucket}>
+                    <h3 className="mb-2 text-sm font-semibold text-desert-ink dark:text-zinc-200">{title}</h3>
+                    <ul className="space-y-2">
+                      {slice.map(({ plant: p, next }) => (
+                        <li
+                          key={p.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist bg-white/70 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800/60"
+                        >
+                          <Link href={`/plant/${p.id}`} className="font-medium text-oasis dark:text-emerald-400 hover:underline">
+                            {p.name}
+                          </Link>
+                          <span className="text-desert-dust dark:text-zinc-400">
+                            Next: {next ? format(next, 'MMM d') : '—'} ·{' '}
+                            {p.fertilizer_seasons?.map((s) => seasonLabel(s)).join(', ')}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        ) : null}
+
         {plants.length === 0 ? (
           <Card className="mb-16 rounded-3xl border border-desert-border dark:border-zinc-800 bg-desert-parchment dark:bg-zinc-900">
             <CardContent className="py-16 text-center">
@@ -772,24 +967,36 @@ export default function LaveenGardenTracker() {
             <CardContent className="py-16 text-center space-y-2">
               <p className="text-lg font-medium text-desert-ink dark:text-white">No plants found</p>
               <p className="text-desert-sage dark:text-zinc-400">
-                Nothing matches &ldquo;{plantSearch.trim()}&rdquo;. Try another name or clear the search.
+                {fertDueThisMonthOnly
+                  ? 'No plants match “due this month” with your search. Try turning off the filter or clear the search.'
+                  : `Nothing matches “${plantSearch.trim()}”. Try another name or clear the search.`}
               </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-4 rounded-full"
-                onClick={() => setPlantSearch('')}
-              >
-                Clear search
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                {plantSearch.trim() ? (
+                  <Button type="button" variant="outline" size="sm" className="mt-2 rounded-full" onClick={() => setPlantSearch('')}>
+                    Clear search
+                  </Button>
+                ) : null}
+                {fertDueThisMonthOnly ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 rounded-full"
+                    onClick={() => setFertDueThisMonthOnly(false)}
+                  >
+                    Show all plants
+                  </Button>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
             {filteredPlants.map((plant) => {
               const showWaterDue = waterDueSoon(plant);
-              const showFertDue = fertDueSoon(plant);
+              const fertU = fertilizerUrgency(plant);
+              const showFertStress = fertilizerDueSoonOrOverdue(plant);
 
               return (
                 <Card key={plant.id} className="relative bg-desert-parchment dark:bg-zinc-900 border border-desert-border dark:border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
@@ -824,11 +1031,35 @@ export default function LaveenGardenTracker() {
                              → Due {safeFormatDue(plant.last_watered, plant.watering_frequency_days)}
                            </span>
                         </p>
-                        <p>Fertilizer: {safeFormatDay(plant.last_fertilized)}
-                           <span className={showFertDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
-                             → Due {safeFormatDue(plant.last_fertilized, plant.fertilizer_frequency_days)}
-                           </span>
+                        <p>
+                          Fertilizer: {safeFormatDay(plant.last_fertilized)}
+                          <span
+                            className={cn(
+                              showFertStress ? 'text-orange-600 dark:text-orange-400 font-medium' : '',
+                            )}
+                          >
+                            {' '}
+                            → Next (in season): {formatNextFertilizationDue(plant)}
+                          </span>
                         </p>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {fertU === 'off_season' ? (
+                            <Badge variant="secondary" className="text-xs font-normal">
+                              Fertilizer off-season
+                            </Badge>
+                          ) : null}
+                          {fertU === 'overdue' ? (
+                            <Badge className="bg-red-600 text-white hover:bg-red-600 text-xs">Fertilize now</Badge>
+                          ) : null}
+                          {fertU === 'due_soon' ? (
+                            <Badge className="bg-amber-600 text-white hover:bg-amber-600 text-xs">Due within a week</Badge>
+                          ) : null}
+                          {fertU === 'due_month' ? (
+                            <Badge variant="outline" className="border-amber-600 text-amber-800 dark:text-amber-300 text-xs">
+                              Due this month
+                            </Badge>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="flex gap-2 pointer-events-auto">
@@ -884,7 +1115,7 @@ export default function LaveenGardenTracker() {
       </main>
 
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[min(90vh,720px)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-oasis dark:text-emerald-400">Edit Plant</DialogTitle>
           </DialogHeader>
@@ -944,6 +1175,57 @@ export default function LaveenGardenTracker() {
                     onChange={(e) => setEditFertDays(e.target.value)}
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Last watered</Label>
+                  <Input
+                    type="date"
+                    value={editingPlant.last_watered ?? ''}
+                    onChange={(e) =>
+                      setEditingPlant({
+                        ...editingPlant,
+                        last_watered: e.target.value || null,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Last fertilized</Label>
+                  <Input
+                    type="date"
+                    value={editingPlant.last_fertilized ?? ''}
+                    onChange={(e) =>
+                      setEditingPlant({
+                        ...editingPlant,
+                        last_fertilized: e.target.value || null,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="mb-2 block">Fertilizer seasons</Label>
+                <FertilizerSeasonCheckboxes
+                  value={editingPlant.fertilizer_seasons ?? ALL_FERTILIZER_SEASONS}
+                  onChange={(fertilizer_seasons) => setEditingPlant({ ...editingPlant, fertilizer_seasons })}
+                  disabled={isDemoMode}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-fert-notes">Fertilizer notes</Label>
+                <Textarea
+                  id="edit-fert-notes"
+                  value={editingPlant.fertilizer_notes ?? ''}
+                  onChange={(e) =>
+                    setEditingPlant({
+                      ...editingPlant,
+                      fertilizer_notes: e.target.value || null,
+                    })
+                  }
+                  className="mt-1 min-h-[72px]"
+                  disabled={isDemoMode}
+                />
               </div>
               <div>
                 <Label>Homepage photo</Label>

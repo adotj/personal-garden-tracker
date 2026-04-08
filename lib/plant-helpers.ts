@@ -1,4 +1,5 @@
 import type { Plant } from '@/lib/plant-types';
+import { normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
 
 export function normalizePlantRow(row: Plant): Plant {
   return {
@@ -7,6 +8,8 @@ export function normalizePlantRow(row: Plant): Plant {
     fertilizer_frequency_days: Number(row.fertilizer_frequency_days) || 30,
     last_watered: row.last_watered ?? null,
     last_fertilized: row.last_fertilized ?? null,
+    fertilizer_seasons: normalizeFertilizerSeasons(row.fertilizer_seasons),
+    fertilizer_notes: row.fertilizer_notes ?? null,
   };
 }
 
@@ -24,6 +27,8 @@ export function plantUpdatePayload(p: Plant) {
     last_watered: p.last_watered,
     fertilizer_frequency_days: p.fertilizer_frequency_days,
     last_fertilized: p.last_fertilized,
+    fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
+    fertilizer_notes: p.fertilizer_notes ?? null,
     photo_url: p.photo_url ?? null,
   };
 }
