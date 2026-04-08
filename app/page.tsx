@@ -14,10 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout, Search } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout } from 'lucide-react';
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
+import { GardenPlantsToolbar } from '@/components/GardenPlantsToolbar';
 import { cn } from '@/lib/utils';
 
 type Activity = {
@@ -548,16 +549,18 @@ export default function LaveenGardenTracker() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <span className="text-4xl shrink-0">🌵</span>
-            <div className="min-w-0">
-              <div className="font-bold text-2xl sm:text-3xl tracking-tighter text-oasis dark:text-emerald-400">Laveen Garden</div>
-              <p className="mt-0.5 text-sm text-desert-sage dark:text-zinc-400">
-                <span className="font-semibold tabular-nums text-oasis dark:text-emerald-400" aria-live="polite">
-                  {totalPlantCount}
-                </span>
-                {' '}
-                {totalPlantCount === 1 ? 'plant' : 'plants'} total
-                {isDemoMode ? ' (demo)' : ''}
-              </p>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="font-bold text-2xl sm:text-3xl tracking-tighter text-oasis dark:text-emerald-400">
+                Laveen Garden
+              </div>
+              <Badge
+                variant="secondary"
+                className="shrink-0 border border-desert-border/60 bg-white/90 px-2.5 py-0.5 text-sm font-semibold tabular-nums text-desert-ink dark:border-zinc-600 dark:bg-zinc-800 dark:text-emerald-300"
+                aria-label={`${totalPlantCount} plants in your garden`}
+              >
+                {totalPlantCount} {totalPlantCount === 1 ? 'plant' : 'plants'}
+                {isDemoMode ? ' · demo' : ''}
+              </Badge>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -674,44 +677,15 @@ export default function LaveenGardenTracker() {
             </Dialog>
           </div>
         </div>
-
-        <div className="max-w-7xl mx-auto px-6 pb-4 pt-0">
-          <Label htmlFor="plant-search" className="sr-only">
-            Search plants by name
-          </Label>
-          <div className="relative w-full max-w-2xl">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-desert-dust dark:text-zinc-500"
-              aria-hidden
-            />
-            <Input
-              id="plant-search"
-              type="text"
-              inputMode="search"
-              enterKeyHint="search"
-              placeholder="Search plants by name..."
-              autoComplete="off"
-              value={plantSearch}
-              onChange={(e) => setPlantSearch(e.target.value)}
-              className="h-11 w-full pl-10 pr-11 text-base md:text-sm pointer-events-auto bg-white dark:bg-zinc-950 border-desert-border dark:border-zinc-700 shadow-sm"
-            />
-            {plantSearch.length > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1/2 z-[1] h-9 w-9 -translate-y-1/2 text-desert-dust hover:text-desert-ink dark:text-zinc-400 dark:hover:text-white pointer-events-auto"
-                onClick={() => setPlantSearch('')}
-                aria-label="Clear search"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
+        <GardenPlantsToolbar
+          totalPlantCount={totalPlantCount}
+          isDemoMode={isDemoMode}
+          plantSearch={plantSearch}
+          onPlantSearchChange={setPlantSearch}
+        />
         {weather && (
           <div className="mb-12 bg-desert-parchment dark:bg-zinc-900 rounded-3xl p-8 border border-desert-border dark:border-zinc-800 shadow-sm">
             <div className="flex items-center gap-8 mb-8">
