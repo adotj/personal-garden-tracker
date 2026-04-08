@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '@/lib/plant-types';
+import { sunExposureLabel } from '@/lib/plant-types';
 import { normalizePlantRow } from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
@@ -32,6 +33,7 @@ import {
   CheckSquare,
   Square,
   NotebookPen,
+  Sun,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { addDays } from 'date-fns';
@@ -484,9 +486,15 @@ export default function PlantProfile() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-oasis dark:text-emerald-400">{plant.name}</h1>
-            <Badge className="mt-1">
-              {plant.container_type} • {plant.pot_size}
-            </Badge>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge>
+                {plant.container_type} • {plant.pot_size}
+              </Badge>
+              <Badge variant="secondary" className="gap-1 font-normal">
+                <Sun className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                {sunExposureLabel(plant.sun_exposure)}
+              </Badge>
+            </div>
           </div>
         </div>
       </header>

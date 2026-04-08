@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
-import type { FertilizerSeason, Plant } from '@/lib/plant-types';
-import { normalizePlantRow, plantUpdatePayload } from '@/lib/plant-helpers';
+import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
+import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
+import { normalizePlantRow, plantUpdatePayload, normalizeSunExposure } from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
   computeNextFertilizationDue,
@@ -16,6 +17,7 @@ import {
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
+import { WateringCalendar } from '@/components/WateringCalendar';
 import { uploadPlantImage, deletePlantImageFromStorage } from '@/lib/storage-upload';
 import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,6 +48,7 @@ type NewPlantForm = {
   species: string;
   container_type: string;
   pot_size: string;
+  sun_exposure: SunExposure;
   watering_frequency_days: number | '';
   fertilizer_frequency_days: number | '';
   last_watered: string;
@@ -151,6 +154,7 @@ export default function LaveenGardenTracker() {
 
   const [newPlant, setNewPlant] = useState<NewPlantForm>({
     name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
+    sun_exposure: 'full_sun',
     watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
     fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],
     fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
@@ -233,6 +237,7 @@ export default function LaveenGardenTracker() {
         last_fertilized: '2026-03-15',
         fertilizer_seasons: ['spring', 'summer'],
         fertilizer_notes: 'Bloom booster in spring',
+        sun_exposure: 'full_sun',
         photo_url: null,
       },
       {
@@ -246,6 +251,7 @@ export default function LaveenGardenTracker() {
         last_fertilized: '2026-02-01',
         fertilizer_seasons: ['summer'],
         fertilizer_notes: 'Light feed; dormant in winter',
+        sun_exposure: 'partial_sun',
         photo_url: null,
       },
       {
@@ -259,6 +265,7 @@ export default function LaveenGardenTracker() {
         last_fertilized: '2026-03-20',
         fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
         fertilizer_notes: null,
+        sun_exposure: 'partial_shade',
         photo_url: null,
       },
     ];
@@ -467,6 +474,7 @@ export default function LaveenGardenTracker() {
       }
       const addDetails = [
         `${row.container_type}, ${row.pot_size}.`,
+        `Sun: ${sunExposureLabel(row.sun_exposure)}.`,
         `Water every ${waterDays} day${waterDays === 1 ? '' : 's'}; fertilize every ${fertDays} day${fertDays === 1 ? '' : 's'}.`,
       ];
       if (seasons.length > 0 && seasons.length < ALL_FERTILIZER_SEASONS.length) {
@@ -482,6 +490,7 @@ export default function LaveenGardenTracker() {
         species: '',
         container_type: 'Grow Bag',
         pot_size: '10 gallon',
+        sun_exposure: 'full_sun',
         watering_frequency_days: 3,
         fertilizer_frequency_days: 30,
         last_watered: new Date().toISOString().split('T')[0],
@@ -530,6 +539,7 @@ export default function LaveenGardenTracker() {
       const fertSeasons = normalizeFertilizerSeasons(merged.fertilizer_seasons);
       const editDetails = [
         `${merged.container_type}, ${merged.pot_size}.`,
+        `Sun: ${sunExposureLabel(merged.sun_exposure)}.`,
         `Water every ${wf} day${wf === 1 ? '' : 's'}; fertilize every ${ff} day${ff === 1 ? '' : 's'}.`,
         `Fertilizer seasons: ${fertSeasons.map(seasonLabel).join(', ')}.`,
       ];
@@ -775,6 +785,27 @@ export default function LaveenGardenTracker() {
                         <Input required value={newPlant.pot_size} onChange={(e) => setNewPlant({ ...newPlant, pot_size: e.target.value })} />
                       )}
                     </div>
+                  </div>
+                  <div>
+                    <Label>Sun exposure</Label>
+                    <p className="text-xs text-desert-dust dark:text-zinc-500 mt-0.5 mb-2">
+                      Where the container sits — full sun heats soil fast in the desert; partial shade can reduce stress.
+                    </p>
+                    <Select
+                      value={newPlant.sun_exposure}
+                      onValueChange={(v) => setNewPlant({ ...newPlant, sun_exposure: v as SunExposure })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUN_EXPOSURE_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value} title={o.hint}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1026,6 +1057,8 @@ export default function LaveenGardenTracker() {
           </Card>
         ) : null}
 
+        {plants.length > 0 ? <WateringCalendar plants={plants} numDays={14} /> : null}
+
         {plants.length === 0 ? (
           <Card className="mb-16 rounded-3xl border border-desert-border dark:border-zinc-800 bg-desert-parchment dark:bg-zinc-900">
             <CardContent className="py-16 text-center">
@@ -1096,6 +1129,9 @@ export default function LaveenGardenTracker() {
                           {plant.container_type} • {plant.pot_size}
                         </Badge>
                       </div>
+                      <p className="text-xs text-desert-sage dark:text-zinc-400 mt-1">
+                        Sun: {sunExposureLabel(plant.sun_exposure)}
+                      </p>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="text-sm text-desert-sage dark:text-zinc-400 space-y-1">
@@ -1252,6 +1288,29 @@ export default function LaveenGardenTracker() {
                     <Input value={editingPlant.pot_size} onChange={(e) => setEditingPlant({ ...editingPlant, pot_size: e.target.value })} />
                   )}
                 </div>
+              </div>
+              <div>
+                <Label>Sun exposure</Label>
+                <p className="text-xs text-desert-dust dark:text-zinc-500 mt-0.5 mb-2">
+                  Container placement — matters a lot for heat and watering in Laveen.
+                </p>
+                <Select
+                  value={normalizeSunExposure(editingPlant.sun_exposure)}
+                  onValueChange={(v) =>
+                    setEditingPlant({ ...editingPlant, sun_exposure: v as SunExposure })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUN_EXPOSURE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} title={o.hint}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

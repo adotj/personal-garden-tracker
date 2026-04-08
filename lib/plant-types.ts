@@ -1,11 +1,44 @@
 export type FertilizerSeason = 'winter' | 'spring' | 'summer' | 'fall';
 
+/** Where the container sits — important for desert heat / scorch */
+export type SunExposure = 'full_sun' | 'partial_sun' | 'partial_shade' | 'full_shade';
+
+export const SUN_EXPOSURE_OPTIONS: readonly { value: SunExposure; label: string; hint: string }[] = [
+  {
+    value: 'full_sun',
+    label: 'Full sun',
+    hint: '6+ hours direct sun (typical open patio or yard)',
+  },
+  {
+    value: 'partial_sun',
+    label: 'Partial sun',
+    hint: 'Mix of direct sun and shade during the day',
+  },
+  {
+    value: 'partial_shade',
+    label: 'Partial shade',
+    hint: 'Filtered light, brief direct sun, or bright shade',
+  },
+  {
+    value: 'full_shade',
+    label: 'Full shade',
+    hint: 'Mostly indirect light; little or no direct sun',
+  },
+] as const;
+
+export function sunExposureLabel(v: string | null | undefined): string {
+  const found = SUN_EXPOSURE_OPTIONS.find((o) => o.value === v);
+  return found?.label ?? 'Full sun';
+}
+
 export type Plant = {
   id: string;
   name: string;
   species?: string;
   container_type: string;
   pot_size: string;
+  /** Light conditions for this container placement */
+  sun_exposure?: SunExposure | null;
   watering_frequency_days: number;
   last_watered: string | null;
   /** Days between fertilizer applications during active {@link fertilizer_seasons} */
