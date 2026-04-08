@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { FertilizerSeason, FertilizerLogRow, Plant } from '@/lib/plant-types';
+import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '@/lib/plant-types';
 import { normalizePlantRow } from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
@@ -98,8 +98,10 @@ export default function PlantProfile() {
     notes: '',
   });
   const [fertSettingsBusy, setFertSettingsBusy] = useState(false);
-  const [plantNotesDraft, setPlantNotesDraft] = useState('');
-  const [plantNotesBusy, setPlantNotesBusy] = useState(false);
+  const [plantNoteEntries, setPlantNoteEntries] = useState<PlantNoteEntry[]>([]);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [noteAddBusy, setNoteAddBusy] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsWriteDisabled(getGardenMode() === 'demo');
@@ -159,6 +161,21 @@ export default function PlantProfile() {
       return;
     }
     setFertilizerLogs((data || []) as FertilizerLogRow[]);
+  }, [plantId]);
+
+  const fetchPlantNoteEntries = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('plant_note_entries')
+      .select('*')
+      .eq('plant_id', plantId)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) {
+      console.warn('plant_note_entries:', error.message);
+      setPlantNoteEntries([]);
+      return;
+    }
+    setPlantNoteEntries((data || []) as PlantNoteEntry[]);
   }, [plantId]);
 
   const logActivityDb = async (action: string, plantName: string) => {
@@ -254,22 +271,46 @@ export default function PlantProfile() {
     }
   };
 
-  const savePlantNotes = async () => {
+  const addPlantNoteEntry = async () => {
     if (!plant || isWriteDisabled) return;
-    setPlantNotesBusy(true);
+    const body = newNoteText.trim();
+    if (!body) {
+      toast.error('Write something before adding a note');
+      return;
+    }
+    setNoteAddBusy(true);
     try {
-      const { error } = await supabase
-        .from('plants')
-        .update({ notes: plantNotesDraft.trim() || null })
-        .eq('id', plantId);
+      const { error } = await supabase.from('plant_note_entries').insert({ plant_id: plantId, body });
       if (error) throw error;
-      toast.success('Notes saved');
-      await fetchPlant();
+      setNewNoteText('');
+      toast.success('Note added');
+      await fetchPlantNoteEntries();
     } catch (e) {
       console.error(e);
-      toast.error('Could not save notes — add the `notes` column if you see a schema error.');
+      toast.error('Could not add note — run the plant_note_entries migration if you see a schema error.');
     } finally {
-      setPlantNotesBusy(false);
+      setNoteAddBusy(false);
+    }
+  };
+
+  const deletePlantNoteEntry = async (entryId: string) => {
+    if (isWriteDisabled) return;
+    if (!confirm('Delete this note? This cannot be undone.')) return;
+    setDeletingNoteId(entryId);
+    try {
+      const { error } = await supabase
+        .from('plant_note_entries')
+        .delete()
+        .eq('id', entryId)
+        .eq('plant_id', plantId);
+      if (error) throw error;
+      toast.success('Note deleted');
+      await fetchPlantNoteEntries();
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not delete note');
+    } finally {
+      setDeletingNoteId(null);
     }
   };
 
@@ -283,13 +324,15 @@ export default function PlantProfile() {
       await fetchPhotos();
       if (cancelled) return;
       await fetchFertilizerLogs();
+      if (cancelled) return;
+      await fetchPlantNoteEntries();
       if (cancelled || !p?.name) return;
       await fetchActivities(p.name);
     })();
     return () => {
       cancelled = true;
     };
-  }, [plantId, fetchPlant, fetchPhotos, fetchFertilizerLogs, fetchActivities]);
+  }, [plantId, fetchPlant, fetchPhotos, fetchFertilizerLogs, fetchPlantNoteEntries, fetchActivities]);
 
   useEffect(() => {
     if (!plant) return;
@@ -297,7 +340,6 @@ export default function PlantProfile() {
       seasons: normalizeFertilizerSeasons(plant.fertilizer_seasons),
       notes: plant.fertilizer_notes ?? '',
     });
-    setPlantNotesDraft(plant.notes ?? '');
   }, [plant?.id]);
 
   const togglePhotoSelected = (id: string) => {
@@ -430,8 +472,6 @@ export default function PlantProfile() {
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
-  const plantNotesMatchesPlant =
-    (plantNotesDraft.trim() || '') === ((plant.notes ?? '').trim());
 
   return (
     <div className="min-h-screen bg-desert-page dark:bg-zinc-950 text-desert-ink dark:text-white">
@@ -580,35 +620,90 @@ export default function PlantProfile() {
               Plant notes
             </CardTitle>
             <p className="text-sm text-desert-dust dark:text-zinc-500">
-              Shared space for anything you both want to remember—pests, pruning, repotting, observations, or
-              “water extra when it hits 110°F.”
+              Each time you add a note it is saved with a timestamp. Delete entries you no longer need. Everyone
+              using the same garden sees the same journal.
             </p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="profile-plant-notes" className="sr-only">
-                Plant notes
-              </Label>
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="profile-new-note">New note</Label>
               <Textarea
-                id="profile-plant-notes"
-                value={plantNotesDraft}
-                onChange={(e) => setPlantNotesDraft(e.target.value)}
-                placeholder="Type notes here… (saved to this plant for everyone using the garden)"
+                id="profile-new-note"
+                value={newNoteText}
+                onChange={(e) => setNewNoteText(e.target.value)}
+                placeholder="e.g. Noticed spider mites on the underside of the oldest leaves — sprayed neem."
                 disabled={isWriteDisabled}
-                className="min-h-[160px] resize-y text-base leading-relaxed"
+                className="min-h-[100px] resize-y text-base leading-relaxed"
               />
+              <Button
+                type="button"
+                className="rounded-full bg-oasis hover:bg-oasis-hover dark:bg-emerald-600"
+                disabled={isWriteDisabled || noteAddBusy || !newNoteText.trim()}
+                onClick={() => void addPlantNoteEntry()}
+              >
+                {noteAddBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Add note
+              </Button>
             </div>
-            <Button
-              type="button"
-              className="rounded-full bg-oasis hover:bg-oasis-hover dark:bg-emerald-600"
-              disabled={isWriteDisabled || plantNotesBusy || plantNotesMatchesPlant}
-              onClick={() => void savePlantNotes()}
-            >
-              {plantNotesBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Save notes
-            </Button>
+
+            {plant.notes?.trim() ? (
+              <div className="rounded-2xl border border-dashed border-desert-border bg-white/40 p-4 dark:border-zinc-600 dark:bg-zinc-800/40">
+                <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust dark:text-zinc-500">
+                  Earlier note (from before journal entries)
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-desert-sage dark:text-zinc-300">
+                  {plant.notes.trim()}
+                </p>
+              </div>
+            ) : null}
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-desert-ink dark:text-zinc-200">History</p>
+              {plantNoteEntries.length === 0 ? (
+                <p className="rounded-xl border border-desert-mist/60 bg-white/50 py-10 text-center text-sm text-desert-dust dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-500">
+                  No journal entries yet. Add your first note above.
+                </p>
+              ) : (
+                <ul className="max-h-[min(420px,50vh)] space-y-3 overflow-y-auto pr-1">
+                  {plantNoteEntries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="rounded-2xl border border-desert-mist/70 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <time
+                          dateTime={entry.created_at}
+                          className="shrink-0 text-xs font-medium text-desert-dust dark:text-zinc-500"
+                        >
+                          {formatLogWhen(entry.created_at)}
+                        </time>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/50"
+                          disabled={isWriteDisabled || deletingNoteId === entry.id}
+                          aria-label="Delete note"
+                          onClick={() => void deletePlantNoteEntry(entry.id)}
+                        >
+                          {deletingNoteId === entry.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-desert-ink dark:text-zinc-100">
+                        {entry.body}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             {isWriteDisabled ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">Demo mode — notes are read-only.</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">Demo mode — journal is read-only.</p>
             ) : null}
           </CardContent>
         </Card>

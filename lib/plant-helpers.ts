@@ -30,7 +30,6 @@ export function plantUpdatePayload(p: Plant) {
     last_fertilized: p.last_fertilized,
     fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
     fertilizer_notes: p.fertilizer_notes ?? null,
-    notes: p.notes?.trim() ? p.notes.trim() : null,
     photo_url: p.photo_url ?? null,
   };
 }

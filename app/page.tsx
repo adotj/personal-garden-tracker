@@ -12,6 +12,7 @@ import {
   fertilizerUrgency,
   formatNextFertilizationDue,
   needsFertilizerThisMonth,
+  normalizeFertilizerSeasons,
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
@@ -26,7 +27,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout, Search, CalendarRange } from 'lucide-react';
-import { format, addDays, differenceInDays, isValid } from 'date-fns';
+import { format, addDays, differenceInDays, formatDistanceToNow, isValid, parseISO } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { cn } from '@/lib/utils';
@@ -51,7 +52,6 @@ type NewPlantForm = {
   last_fertilized: string;
   fertilizer_seasons: FertilizerSeason[];
   fertilizer_notes: string;
-  notes: string;
   location_in_garden: string;
   photo_url: string | null;
 };
@@ -68,6 +68,38 @@ function safeFormatDue(iso: string | null, freqDays: number): string {
   const due = addDays(last, freqDays);
   if (!isValid(last) || !isValid(due)) return '';
   return format(due, 'MMM d');
+}
+
+function formatActivityWhen(iso: string): string {
+  const d = new Date(iso);
+  return isValid(d) ? format(d, "EEE, MMM d, yyyy 'at' h:mm a") : iso;
+}
+
+function activityRelativeTime(iso: string): string {
+  const d = new Date(iso);
+  return isValid(d) ? formatDistanceToNow(d, { addSuffix: true }) : '';
+}
+
+/** Short headline for each log row (action code → plain language). */
+function activityPrimaryLine(log: Activity): string {
+  const name = log.plant_name?.trim();
+  const quoted = name ? `“${name}”` : null;
+  switch (log.action) {
+    case 'Plant Watered':
+      return quoted ? `Watered ${quoted}` : 'Plant watered';
+    case 'Plant Fertilized':
+      return quoted ? `Fertilized ${quoted}` : 'Plant fertilized';
+    case 'Plant Added':
+      return quoted ? `Added ${quoted} to the garden` : 'Plant added';
+    case 'Plant Edited':
+      return quoted ? `Updated ${quoted}` : 'Plant updated';
+    case 'Plant Deleted':
+      return quoted ? `Removed ${quoted} from the garden` : 'Plant removed';
+    case 'Photo Updated':
+      return quoted ? `New homepage photo for ${quoted}` : 'Photo updated';
+    default:
+      return quoted ? `${log.action} — ${quoted}` : log.action;
+  }
 }
 
 function waterDueSoon(plant: Plant): boolean {
@@ -123,7 +155,7 @@ export default function LaveenGardenTracker() {
     fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],
     fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
     fertilizer_notes: '',
-    notes: '', location_in_garden: '', photo_url: null as string | null,
+    location_in_garden: '', photo_url: null as string | null,
   });
   const [editWaterDays, setEditWaterDays] = useState('');
   const [editFertDays, setEditFertDays] = useState('');
@@ -245,7 +277,7 @@ export default function LaveenGardenTracker() {
   };
 
   const fetchActivities = async () => {
-    const { data } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(25);
+    const { data } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(50);
     setActivities(data || []);
   };
 
@@ -336,9 +368,9 @@ export default function LaveenGardenTracker() {
       });
   }, [plants]);
 
-  const logActivity = async (action: string, plant_name?: string) => {
+  const logActivity = async (action: string, plant_name?: string, details?: string | null) => {
     if (isWriteDisabled) return;
-    await supabase.from('activity_logs').insert([{ action, plant_name }]);
+    await supabase.from('activity_logs').insert([{ action, plant_name, details: details ?? null }]);
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
@@ -362,7 +394,11 @@ export default function LaveenGardenTracker() {
     if (photoUrl) {
       if (isEdit && editingPlant) {
         setEditingPlant({ ...editingPlant, photo_url: photoUrl });
-        await logActivity('Photo Updated', editingPlant.name);
+        await logActivity(
+          'Photo Updated',
+          editingPlant.name,
+          'Uploaded a new image; it is set as the card photo and added to the profile photo timeline.',
+        );
       } else {
         setNewPlant({ ...newPlant, photo_url: photoUrl });
       }
@@ -421,7 +457,6 @@ export default function LaveenGardenTracker() {
       fertilizer_frequency_days: fertDays,
       fertilizer_seasons: seasons,
       fertilizer_notes: newPlant.fertilizer_notes.trim() || null,
-      notes: newPlant.notes.trim() || null,
     };
     const { data: inserted, error } = await supabase.from('plants').insert([row]).select('id').single();
     if (error) toast.error('Failed to add plant');
@@ -430,7 +465,15 @@ export default function LaveenGardenTracker() {
         const { error: gErr } = await supabase.from('plant_photos').insert({ plant_id: inserted.id, photo_url: row.photo_url });
         if (gErr) console.error('plant_photos insert:', gErr);
       }
-      await logActivity('Plant Added', newPlant.name);
+      const addDetails = [
+        `${row.container_type}, ${row.pot_size}.`,
+        `Water every ${waterDays} day${waterDays === 1 ? '' : 's'}; fertilize every ${fertDays} day${fertDays === 1 ? '' : 's'}.`,
+      ];
+      if (seasons.length > 0 && seasons.length < ALL_FERTILIZER_SEASONS.length) {
+        addDetails.push(`Fertilizer scheduled in: ${seasons.map(seasonLabel).join(', ')}.`);
+      }
+      if (row.photo_url) addDetails.push('Homepage photo attached.');
+      await logActivity('Plant Added', newPlant.name, addDetails.join(' '));
       toast.success('Plant added successfully! 🌱');
       if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
       setIsAddModalOpen(false);
@@ -445,7 +488,6 @@ export default function LaveenGardenTracker() {
         last_fertilized: new Date().toISOString().split('T')[0],
         fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
         fertilizer_notes: '',
-        notes: '',
         location_in_garden: '',
         photo_url: null,
       });
@@ -485,7 +527,16 @@ export default function LaveenGardenTracker() {
         if (gErr) console.error('plant_photos insert:', gErr);
       }
       editPhotoBaselineRef.current = null;
-      await logActivity('Plant Edited', editingPlant.name);
+      const fertSeasons = normalizeFertilizerSeasons(merged.fertilizer_seasons);
+      const editDetails = [
+        `${merged.container_type}, ${merged.pot_size}.`,
+        `Water every ${wf} day${wf === 1 ? '' : 's'}; fertilize every ${ff} day${ff === 1 ? '' : 's'}.`,
+        `Fertilizer seasons: ${fertSeasons.map(seasonLabel).join(', ')}.`,
+      ];
+      if (merged.photo_url && merged.photo_url !== baseline) {
+        editDetails.push('Card / homepage photo was replaced.');
+      }
+      await logActivity('Plant Edited', editingPlant.name, editDetails.join(' '));
       toast.success('Plant updated successfully!');
       if (editPreviewUrl) URL.revokeObjectURL(editPreviewUrl);
       setIsEditModalOpen(false);
@@ -500,7 +551,12 @@ export default function LaveenGardenTracker() {
     if (isWriteDisabled) return;
     const today = new Date().toISOString().split('T')[0];
     await supabase.from('plants').update({ last_watered: today }).eq('id', id);
-    await logActivity('Plant Watered', name);
+    const todayLabel = isValid(parseISO(today)) ? format(parseISO(today), 'MMMM d, yyyy') : today;
+    await logActivity(
+      'Plant Watered',
+      name,
+      `Last watered on this plant’s record is now ${todayLabel}.`,
+    );
     toast.success(`✅ ${name} watered today!`);
     fetchPlants();        // ← Refresh to show updated date
     fetchActivities();
@@ -539,6 +595,15 @@ export default function LaveenGardenTracker() {
     setPlants((prev) =>
       prev.map((p) => (p.id === id ? { ...p, last_fertilized: fertilizedDate } : p)),
     );
+    const fertWhen = isValid(parseISO(fertilizedDate))
+      ? format(parseISO(fertilizedDate), 'MMMM d, yyyy')
+      : fertilizedDate;
+    await supabase
+      .from('activity_logs')
+      .update({
+        details: `Last fertilized on this plant’s record is now ${fertWhen} (from the dashboard).`,
+      })
+      .eq('id', logRow.id);
     const { error: fertLogErr } = await supabase.from('fertilizer_logs').insert({
       plant_id: id,
       applied_on: fertilizedDate,
@@ -563,7 +628,14 @@ export default function LaveenGardenTracker() {
     const { error } = await supabase.from('plants').delete().eq('id', id);
     if (error) toast.error('Failed to delete plant');
     else {
-      await logActivity('Plant Deleted', name);
+      const imgCount = urls.size;
+      await logActivity(
+        'Plant Deleted',
+        name,
+        imgCount > 0
+          ? `Removed the plant and deleted ${imgCount} image file${imgCount === 1 ? '' : 's'} from storage.`
+          : 'Removed the plant record.',
+      );
       toast.success(`${name} deleted`);
       fetchPlants();
       fetchActivities();
@@ -779,17 +851,6 @@ export default function LaveenGardenTracker() {
                       onChange={(e) => setNewPlant({ ...newPlant, fertilizer_notes: e.target.value })}
                       placeholder="e.g. 10-10-10 balanced, half strength"
                       className="mt-1 min-h-[72px] resize-y"
-                      disabled={isDemoMode}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="new-plant-notes">Plant notes (optional)</Label>
-                    <Textarea
-                      id="new-plant-notes"
-                      value={newPlant.notes}
-                      onChange={(e) => setNewPlant({ ...newPlant, notes: e.target.value })}
-                      placeholder="Shared journal — observations, reminders, anything you both should know"
-                      className="mt-1 min-h-[88px] resize-y"
                       disabled={isDemoMode}
                     />
                   </div>
@@ -1107,19 +1168,45 @@ export default function LaveenGardenTracker() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+            <div className="space-y-1 max-h-[28rem] overflow-y-auto pr-1">
               {activities.length === 0 ? (
                 <p className="text-center py-8 text-desert-dust dark:text-zinc-400">No activity yet</p>
               ) : (
-                activities.map((log) => (
-                  <div key={log.id} className="flex justify-between text-sm border-b border-desert-mist dark:border-zinc-800 pb-3 last:border-0">
-                    <div>
-                      <span className="font-medium">{log.action}</span>
-                      {log.plant_name && <span className="ml-2 text-oasis dark:text-emerald-400">— {log.plant_name}</span>}
+                activities.map((log) => {
+                  const when = formatActivityWhen(log.created_at);
+                  const rel = activityRelativeTime(log.created_at);
+                  return (
+                    <div
+                      key={log.id}
+                      className="border-b border-desert-mist dark:border-zinc-800 py-3.5 last:border-0 last:pb-0 first:pt-0"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="font-medium text-desert-ink dark:text-zinc-100 leading-snug">
+                            {activityPrimaryLine(log)}
+                          </p>
+                          {log.details ? (
+                            <p className="text-sm text-desert-sage dark:text-zinc-400 leading-relaxed">
+                              {log.details}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="shrink-0 text-left sm:max-w-[11rem] sm:text-right">
+                          <time
+                            dateTime={log.created_at}
+                            title={when}
+                            className="block text-xs font-medium text-desert-dust dark:text-zinc-500"
+                          >
+                            {when}
+                          </time>
+                          <span className="mt-0.5 block text-[11px] text-desert-dust/85 dark:text-zinc-500">
+                            {rel}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-xs text-desert-dust dark:text-zinc-500">{format(new Date(log.created_at), 'MMM d, h:mm a')}</span>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </CardContent>
@@ -1236,22 +1323,6 @@ export default function LaveenGardenTracker() {
                     })
                   }
                   className="mt-1 min-h-[72px]"
-                  disabled={isDemoMode}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-plant-notes">Plant notes (shared journal)</Label>
-                <Textarea
-                  id="edit-plant-notes"
-                  value={editingPlant.notes ?? ''}
-                  onChange={(e) =>
-                    setEditingPlant({
-                      ...editingPlant,
-                      notes: e.target.value || null,
-                    })
-                  }
-                  className="mt-1 min-h-[100px]"
-                  placeholder="Observations, tasks, anything you both should know…"
                   disabled={isDemoMode}
                 />
               </div>

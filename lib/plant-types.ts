@@ -16,7 +16,7 @@ export type Plant = {
   fertilizer_seasons?: FertilizerSeason[] | null;
   /** Optional product / method notes */
   fertilizer_notes?: string | null;
-  /** Free-form plant journal / shared care notes */
+  /** Legacy single-field note (optional); new journal uses {@link PlantNoteEntry} */
   notes?: string | null;
   location_in_garden?: string;
   /** Shown on homepage / plant cards — the “key” photo */
@@ -35,5 +35,13 @@ export type FertilizerLogRow = {
   plant_id: string;
   applied_on: string;
   notes: string | null;
+  created_at: string;
+};
+
+/** One timestamped note on the plant profile journal */
+export type PlantNoteEntry = {
+  id: string;
+  plant_id: string;
+  body: string;
   created_at: string;
 };
