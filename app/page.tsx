@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
-import { normalizePlantRow, plantInsertPayload, plantUpdatePayload, normalizeSunExposure } from '@/lib/plant-helpers';
+import {
+  normalizePlantRow,
+  plantInsertCorePayload,
+  plantInsertExtendedPatch,
+  plantUpdatePayload,
+  normalizeSunExposure,
+} from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
   computeNextFertilizationDue,
@@ -463,6 +469,10 @@ export default function LaveenGardenTracker() {
   const addPlant = async (e: React.FormEvent) => {
     if (isWriteDisabled) return;
     e.preventDefault();
+    if (!newPlant.name.trim()) {
+      toast.error('Plant name is required');
+      return;
+    }
     const waterDays =
       newPlant.watering_frequency_days === ''
         ? 3
@@ -473,42 +483,55 @@ export default function LaveenGardenTracker() {
         : Math.max(1, Number(newPlant.fertilizer_frequency_days));
     const seasons =
       newPlant.fertilizer_seasons?.length > 0 ? newPlant.fertilizer_seasons : [...ALL_FERTILIZER_SEASONS];
-    const row = plantInsertPayload({
+    const coreRow = plantInsertCorePayload({
       name: newPlant.name,
       container_type: newPlant.container_type,
       pot_size: newPlant.pot_size,
-      sun_exposure: newPlant.sun_exposure,
       watering_frequency_days: waterDays,
-      fertilizer_frequency_days: fertDays,
       last_watered: newPlant.last_watered,
       last_fertilized: newPlant.last_fertilized,
-      fertilizer_seasons: seasons,
-      fertilizer_notes: newPlant.fertilizer_notes,
       photo_url: newPlant.photo_url,
     });
-    const { data: inserted, error } = await supabase.from('plants').insert([row]).select('id').single();
+    const { data: inserted, error } = await supabase.from('plants').insert([coreRow]).select('id').single();
     if (error) {
-      toast.error(error.message || 'Failed to add plant');
+      const parts = [error.message, error.details, error.hint].filter(
+        (s): s is string => typeof s === 'string' && s.trim().length > 0,
+      );
+      toast.error(parts.length > 0 ? parts.join(' — ') : 'Failed to add plant');
       return;
     }
-    if (inserted?.id && row.photo_url) {
+    if (inserted?.id) {
+      const { error: extErr } = await supabase
+        .from('plants')
+        .update(plantInsertExtendedPatch({
+          sun_exposure: newPlant.sun_exposure,
+          fertilizer_frequency_days: fertDays,
+          fertilizer_seasons: seasons,
+          fertilizer_notes: newPlant.fertilizer_notes,
+        }))
+        .eq('id', inserted.id);
+      if (extErr) {
+        console.warn('plants extended columns update (add supabase/migrations if missing):', extErr);
+      }
+    }
+    if (inserted?.id && coreRow.photo_url) {
       const createdIso = datetimeLocalToIsoUtc(newPhotoTimelineAt);
       const { error: gErr } = await supabase.from('plant_photos').insert({
         plant_id: inserted.id,
-        photo_url: row.photo_url,
+        photo_url: coreRow.photo_url,
         ...(createdIso ? { created_at: createdIso } : {}),
       });
       if (gErr) console.error('plant_photos insert:', gErr);
     }
     const addDetails = [
-      `${row.container_type}, ${row.pot_size}.`,
-      `Sun: ${sunExposureLabel(row.sun_exposure)}.`,
+      `${coreRow.container_type}, ${coreRow.pot_size}.`,
+      `Sun: ${sunExposureLabel(newPlant.sun_exposure)}.`,
       `Water every ${waterDays} day${waterDays === 1 ? '' : 's'}; fertilize every ${fertDays} day${fertDays === 1 ? '' : 's'}.`,
     ];
     if (seasons.length > 0 && seasons.length < ALL_FERTILIZER_SEASONS.length) {
       addDetails.push(`Fertilizer scheduled in: ${seasons.map(seasonLabel).join(', ')}.`);
     }
-    if (row.photo_url) addDetails.push('Homepage photo attached.');
+    if (coreRow.photo_url) addDetails.push('Homepage photo attached.');
     await logActivity('Plant Added', newPlant.name, addDetails.join(' '));
     toast.success('Plant added successfully! 🌱');
     if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);

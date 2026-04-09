@@ -26,7 +26,7 @@ export function normalizePlantRow(row: Plant): Plant {
 /**
  * Writable columns present in a typical `plants` table after repo migrations.
  * Does not include `species` / `location_in_garden` until you run
- * `20260415120000_plants_species_location.sql` and add those keys here + in {@link plantInsertPayload}.
+ * `20260415120000_plants_species_location.sql` and add those keys here.
  */
 export function plantUpdatePayload(p: Plant) {
   return {
@@ -45,33 +45,42 @@ export function plantUpdatePayload(p: Plant) {
 }
 
 /**
- * Explicit insert — do not spread add-plant form state (empty `species` / `location_in_garden`
- * were sent to PostgREST and caused 400 when those columns are missing).
+ * Minimal insert: columns that exist on older `plants` tables before sun/fertilizer migrations.
+ * Extended fields are applied in a second `.update()` via {@link plantInsertExtendedPatch}.
  */
-export function plantInsertPayload(input: {
+export function plantInsertCorePayload(input: {
   name: string;
   container_type: string;
   pot_size: string;
-  sun_exposure: SunExposure | null | undefined;
   watering_frequency_days: number;
-  fertilizer_frequency_days: number;
   last_watered: string;
   last_fertilized: string;
-  fertilizer_seasons: FertilizerSeason[] | null | undefined;
-  fertilizer_notes: string;
   photo_url: string | null;
 }) {
+  const today = new Date().toISOString().split('T')[0];
   return {
     name: input.name.trim(),
     container_type: input.container_type,
     pot_size: input.pot_size,
-    sun_exposure: normalizeSunExposure(input.sun_exposure),
     watering_frequency_days: input.watering_frequency_days,
-    last_watered: input.last_watered.trim() || null,
+    // Older schemas often use NOT NULL dates without defaults; avoid null on insert.
+    last_watered: input.last_watered.trim() || today,
+    last_fertilized: input.last_fertilized.trim() || today,
+    photo_url: input.photo_url ?? null,
+  };
+}
+
+/** Sun + fertilizer columns from later migrations — best-effort `.update()` after insert. */
+export function plantInsertExtendedPatch(input: {
+  sun_exposure: SunExposure | null | undefined;
+  fertilizer_frequency_days: number;
+  fertilizer_seasons: FertilizerSeason[] | null | undefined;
+  fertilizer_notes: string;
+}) {
+  return {
+    sun_exposure: normalizeSunExposure(input.sun_exposure),
     fertilizer_frequency_days: input.fertilizer_frequency_days,
-    last_fertilized: input.last_fertilized.trim() || null,
     fertilizer_seasons: normalizeFertilizerSeasons(input.fertilizer_seasons),
     fertilizer_notes: input.fertilizer_notes.trim() || null,
-    photo_url: input.photo_url ?? null,
   };
 }
