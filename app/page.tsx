@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
-import { normalizePlantRow, plantUpdatePayload, normalizeSunExposure } from '@/lib/plant-helpers';
+import { normalizePlantRow, plantInsertPayload, plantUpdatePayload, normalizeSunExposure } from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
   computeNextFertilizationDue,
@@ -473,58 +473,65 @@ export default function LaveenGardenTracker() {
         : Math.max(1, Number(newPlant.fertilizer_frequency_days));
     const seasons =
       newPlant.fertilizer_seasons?.length > 0 ? newPlant.fertilizer_seasons : [...ALL_FERTILIZER_SEASONS];
-    const row = {
-      ...newPlant,
+    const row = plantInsertPayload({
+      name: newPlant.name,
+      container_type: newPlant.container_type,
+      pot_size: newPlant.pot_size,
+      sun_exposure: newPlant.sun_exposure,
       watering_frequency_days: waterDays,
       fertilizer_frequency_days: fertDays,
+      last_watered: newPlant.last_watered,
+      last_fertilized: newPlant.last_fertilized,
       fertilizer_seasons: seasons,
-      fertilizer_notes: newPlant.fertilizer_notes.trim() || null,
-    };
+      fertilizer_notes: newPlant.fertilizer_notes,
+      photo_url: newPlant.photo_url,
+    });
     const { data: inserted, error } = await supabase.from('plants').insert([row]).select('id').single();
-    if (error) toast.error('Failed to add plant');
-    else {
-      if (inserted?.id && row.photo_url) {
-        const createdIso = datetimeLocalToIsoUtc(newPhotoTimelineAt);
-        const { error: gErr } = await supabase.from('plant_photos').insert({
-          plant_id: inserted.id,
-          photo_url: row.photo_url,
-          ...(createdIso ? { created_at: createdIso } : {}),
-        });
-        if (gErr) console.error('plant_photos insert:', gErr);
-      }
-      const addDetails = [
-        `${row.container_type}, ${row.pot_size}.`,
-        `Sun: ${sunExposureLabel(row.sun_exposure)}.`,
-        `Water every ${waterDays} day${waterDays === 1 ? '' : 's'}; fertilize every ${fertDays} day${fertDays === 1 ? '' : 's'}.`,
-      ];
-      if (seasons.length > 0 && seasons.length < ALL_FERTILIZER_SEASONS.length) {
-        addDetails.push(`Fertilizer scheduled in: ${seasons.map(seasonLabel).join(', ')}.`);
-      }
-      if (row.photo_url) addDetails.push('Homepage photo attached.');
-      await logActivity('Plant Added', newPlant.name, addDetails.join(' '));
-      toast.success('Plant added successfully! 🌱');
-      if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
-      setIsAddModalOpen(false);
-      setNewPlant({
-        name: '',
-        species: '',
-        container_type: 'Grow Bag',
-        pot_size: '10 gallon',
-        sun_exposure: 'full_sun',
-        watering_frequency_days: 3,
-        fertilizer_frequency_days: 30,
-        last_watered: new Date().toISOString().split('T')[0],
-        last_fertilized: new Date().toISOString().split('T')[0],
-        fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
-        fertilizer_notes: '',
-        location_in_garden: '',
-        photo_url: null,
-      });
-      setNewPreviewUrl(null);
-      setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
-      fetchPlants();
-      fetchActivities();
+    if (error) {
+      toast.error(error.message || 'Failed to add plant');
+      return;
     }
+    if (inserted?.id && row.photo_url) {
+      const createdIso = datetimeLocalToIsoUtc(newPhotoTimelineAt);
+      const { error: gErr } = await supabase.from('plant_photos').insert({
+        plant_id: inserted.id,
+        photo_url: row.photo_url,
+        ...(createdIso ? { created_at: createdIso } : {}),
+      });
+      if (gErr) console.error('plant_photos insert:', gErr);
+    }
+    const addDetails = [
+      `${row.container_type}, ${row.pot_size}.`,
+      `Sun: ${sunExposureLabel(row.sun_exposure)}.`,
+      `Water every ${waterDays} day${waterDays === 1 ? '' : 's'}; fertilize every ${fertDays} day${fertDays === 1 ? '' : 's'}.`,
+    ];
+    if (seasons.length > 0 && seasons.length < ALL_FERTILIZER_SEASONS.length) {
+      addDetails.push(`Fertilizer scheduled in: ${seasons.map(seasonLabel).join(', ')}.`);
+    }
+    if (row.photo_url) addDetails.push('Homepage photo attached.');
+    await logActivity('Plant Added', newPlant.name, addDetails.join(' '));
+    toast.success('Plant added successfully! 🌱');
+    if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
+    setIsAddModalOpen(false);
+    setNewPlant({
+      name: '',
+      species: '',
+      container_type: 'Grow Bag',
+      pot_size: '10 gallon',
+      sun_exposure: 'full_sun',
+      watering_frequency_days: 3,
+      fertilizer_frequency_days: 30,
+      last_watered: new Date().toISOString().split('T')[0],
+      last_fertilized: new Date().toISOString().split('T')[0],
+      fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
+      fertilizer_notes: '',
+      location_in_garden: '',
+      photo_url: null,
+    });
+    setNewPreviewUrl(null);
+    setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
+    fetchPlants();
+    fetchActivities();
   };
 
   const updatePlant = async (e: React.FormEvent) => {

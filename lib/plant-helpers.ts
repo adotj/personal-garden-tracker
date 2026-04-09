@@ -1,4 +1,4 @@
-import type { Plant, SunExposure } from '@/lib/plant-types';
+import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
 
 const SUN_EXPOSURE_SET = new Set<string>(['full_sun', 'partial_sun', 'partial_shade', 'full_shade']);
@@ -24,9 +24,9 @@ export function normalizePlantRow(row: Plant): Plant {
 }
 
 /**
- * Only columns the edit flow actually persists — do not spread select('*') rows into .update()
- * (avoids `id`, `created_at`, etc.). Omit columns your DB may not have yet (`species`,
- * `location_in_garden`) if needed.
+ * Writable columns present in a typical `plants` table after repo migrations.
+ * Does not include `species` / `location_in_garden` until you run
+ * `20260415120000_plants_species_location.sql` and add those keys here + in {@link plantInsertPayload}.
  */
 export function plantUpdatePayload(p: Plant) {
   return {
@@ -35,11 +35,43 @@ export function plantUpdatePayload(p: Plant) {
     pot_size: p.pot_size,
     sun_exposure: normalizeSunExposure(p.sun_exposure),
     watering_frequency_days: p.watering_frequency_days,
-    last_watered: p.last_watered,
+    last_watered: p.last_watered?.trim() || null,
     fertilizer_frequency_days: p.fertilizer_frequency_days,
-    last_fertilized: p.last_fertilized,
+    last_fertilized: p.last_fertilized?.trim() || null,
     fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
     fertilizer_notes: p.fertilizer_notes ?? null,
     photo_url: p.photo_url ?? null,
+  };
+}
+
+/**
+ * Explicit insert — do not spread add-plant form state (empty `species` / `location_in_garden`
+ * were sent to PostgREST and caused 400 when those columns are missing).
+ */
+export function plantInsertPayload(input: {
+  name: string;
+  container_type: string;
+  pot_size: string;
+  sun_exposure: SunExposure | null | undefined;
+  watering_frequency_days: number;
+  fertilizer_frequency_days: number;
+  last_watered: string;
+  last_fertilized: string;
+  fertilizer_seasons: FertilizerSeason[] | null | undefined;
+  fertilizer_notes: string;
+  photo_url: string | null;
+}) {
+  return {
+    name: input.name.trim(),
+    container_type: input.container_type,
+    pot_size: input.pot_size,
+    sun_exposure: normalizeSunExposure(input.sun_exposure),
+    watering_frequency_days: input.watering_frequency_days,
+    last_watered: input.last_watered.trim() || null,
+    fertilizer_frequency_days: input.fertilizer_frequency_days,
+    last_fertilized: input.last_fertilized.trim() || null,
+    fertilizer_seasons: normalizeFertilizerSeasons(input.fertilizer_seasons),
+    fertilizer_notes: input.fertilizer_notes.trim() || null,
+    photo_url: input.photo_url ?? null,
   };
 }
