@@ -120,6 +120,8 @@ export default function PlantProfile() {
   const [aiPromptOpen, setAiPromptOpen] = useState(false);
   const timelineUploadInputRef = useRef<HTMLInputElement>(null);
   const timelineCameraInputRef = useRef<HTMLInputElement>(null);
+  const slideshowTouchStartXRef = useRef<number | null>(null);
+  const slideshowTouchStartYRef = useRef<number | null>(null);
 
   useEffect(() => {
     setIsWriteDisabled(getGardenMode() === 'demo');
@@ -561,6 +563,27 @@ export default function PlantProfile() {
   const showNewerPhoto = () => {
     if (photos.length === 0 || slideshowIndex === null) return;
     setSlideshowIndex((slideshowIndex - 1 + photos.length) % photos.length);
+  };
+
+  const onSlideshowTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    slideshowTouchStartXRef.current = touch.clientX;
+    slideshowTouchStartYRef.current = touch.clientY;
+  };
+
+  const onSlideshowTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const startX = slideshowTouchStartXRef.current;
+    const startY = slideshowTouchStartYRef.current;
+    slideshowTouchStartXRef.current = null;
+    slideshowTouchStartYRef.current = null;
+    if (startX === null || startY === null || photos.length < 2) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    // Require mostly-horizontal intent and minimum travel distance to avoid accidental flips.
+    if (Math.abs(dx) < 48 || Math.abs(dx) <= Math.abs(dy)) return;
+    if (dx < 0) showOlderPhoto();
+    else showNewerPhoto();
   };
 
   if (loading) {
@@ -1330,7 +1353,11 @@ export default function PlantProfile() {
                   </Button>
                 </div>
               </div>
-              <div className="flex items-center justify-center bg-black p-2 sm:p-4">
+              <div
+                className="flex items-center justify-center bg-black p-2 sm:p-4"
+                onTouchStart={onSlideshowTouchStart}
+                onTouchEnd={onSlideshowTouchEnd}
+              >
                 <img
                   src={slideshowPhoto.photo_url}
                   alt={`${plant.name} timeline photo`}
