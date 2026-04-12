@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '@/lib/plant-types';
@@ -14,8 +14,8 @@ import {
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
-import { deletePlantImageFromStorage } from '@/lib/storage-upload';
-import { datetimeLocalToIsoUtc, toDatetimeLocalValue } from '@/lib/photo-timeline';
+import { deletePlantImageFromStorage, uploadPlantImage } from '@/lib/storage-upload';
+import { datetimeLocalToIsoUtc, defaultPhotoTimelineFromFile, toDatetimeLocalValue } from '@/lib/photo-timeline';
 import { buildPlantTroubleshootingPrompt } from '@/lib/plant-ai-prompt';
 import { getGardenMode } from '@/lib/garden-session';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ import {
   Trash2,
   Loader2,
   Image as ImageIcon,
+  Camera,
   Droplet,
   Sprout,
   Star,
@@ -112,7 +113,10 @@ export default function PlantProfile() {
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [photoDateDialog, setPhotoDateDialog] = useState<{ id: string; datetimeLocal: string } | null>(null);
   const [photoDateSaving, setPhotoDateSaving] = useState(false);
+  const [photoUploadBusy, setPhotoUploadBusy] = useState(false);
   const [aiPromptOpen, setAiPromptOpen] = useState(false);
+  const timelineUploadInputRef = useRef<HTMLInputElement>(null);
+  const timelineCameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setIsWriteDisabled(getGardenMode() === 'demo');
@@ -475,6 +479,40 @@ export default function PlantProfile() {
     }
   };
 
+  const addTimelinePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!plant || isWriteDisabled) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoUploadBusy(true);
+    try {
+      const photoUrl = await uploadPlantImage(file);
+      if (!photoUrl) {
+        toast.error('Photo upload failed');
+        return;
+      }
+      const createdIso = datetimeLocalToIsoUtc(defaultPhotoTimelineFromFile(file));
+      const { error } = await supabase.from('plant_photos').insert({
+        plant_id: plantId,
+        photo_url: photoUrl,
+        ...(createdIso ? { created_at: createdIso } : {}),
+      });
+      if (error) {
+        await deletePlantImageFromStorage(photoUrl);
+        throw error;
+      }
+      await logActivityDb('Photo Added', plant.name);
+      toast.success('Photo added to history');
+      await fetchPhotos();
+      await fetchActivities(plant.name);
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not add photo');
+    } finally {
+      e.target.value = '';
+      setPhotoUploadBusy(false);
+    }
+  };
+
   const setAsProfilePicture = async (photoUrl: string) => {
     setSettingProfileForUrl(photoUrl);
     try {
@@ -576,7 +614,7 @@ export default function PlantProfile() {
               />
             </div>
             <p className="mt-2 text-sm text-desert-dust dark:text-zinc-500">
-              Choose a different image from photo history below, or add one from the garden dashboard.
+              Choose a different image from photo history below, or add progress photos here.
             </p>
           </div>
         )}
@@ -590,7 +628,9 @@ export default function PlantProfile() {
                 {photos.length} photo{photos.length === 1 ? '' : 's'} in timeline. Tap{' '}
                 <span className="font-medium text-desert-ink dark:text-zinc-300">Select photos</span> to choose
                 several, then delete. Use <span className="font-medium text-desert-ink dark:text-zinc-300">Use as profile</span>{' '}
-                on any shot to make it the home / card picture.
+                on any shot to make it the home / card picture. Add new photos with{' '}
+                <span className="font-medium text-desert-ink dark:text-zinc-300">Upload photo</span> or{' '}
+                <span className="font-medium text-desert-ink dark:text-zinc-300">Take photo</span> to track progress.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -634,25 +674,66 @@ export default function PlantProfile() {
                   </Button>
                 </>
               ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full"
-                  onClick={() => setPhotoSelectMode(true)}
-                  disabled={photos.length === 0}
-                >
-                  <CheckSquare className="h-4 w-4 mr-1.5" />
-                  Select photos
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => timelineUploadInputRef.current?.click()}
+                    disabled={isWriteDisabled || photoUploadBusy}
+                  >
+                    {photoUploadBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <ImageIcon className="h-4 w-4 mr-1.5" />}
+                    Upload photo
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => timelineCameraInputRef.current?.click()}
+                    disabled={isWriteDisabled || photoUploadBusy}
+                  >
+                    {photoUploadBusy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Camera className="h-4 w-4 mr-1.5" />}
+                    Take photo
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => setPhotoSelectMode(true)}
+                    disabled={photos.length === 0}
+                  >
+                    <CheckSquare className="h-4 w-4 mr-1.5" />
+                    Select photos
+                  </Button>
+                </>
               )}
             </div>
           </div>
+          <input
+            ref={timelineUploadInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => void addTimelinePhoto(e)}
+          />
+          <input
+            ref={timelineCameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => void addTimelinePhoto(e)}
+          />
 
           {photos.length === 0 ? (
             <Card className="bg-desert-parchment dark:bg-zinc-900 border-desert-border dark:border-zinc-800">
               <CardContent className="py-12 text-center">
-                <p className="text-desert-dust dark:text-zinc-500">No timeline photos yet.</p>
+                <p className="text-desert-dust dark:text-zinc-500">
+                  No timeline photos yet. Upload or take one above to start tracking growth.
+                </p>
               </CardContent>
             </Card>
           ) : (
