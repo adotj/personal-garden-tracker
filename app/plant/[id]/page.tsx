@@ -32,6 +32,8 @@ import {
   Loader2,
   Image as ImageIcon,
   Camera,
+  ChevronLeft,
+  ChevronRight,
   Droplet,
   Sprout,
   Star,
@@ -114,6 +116,7 @@ export default function PlantProfile() {
   const [photoDateDialog, setPhotoDateDialog] = useState<{ id: string; datetimeLocal: string } | null>(null);
   const [photoDateSaving, setPhotoDateSaving] = useState(false);
   const [photoUploadBusy, setPhotoUploadBusy] = useState(false);
+  const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [aiPromptOpen, setAiPromptOpen] = useState(false);
   const timelineUploadInputRef = useRef<HTMLInputElement>(null);
   const timelineCameraInputRef = useRef<HTMLInputElement>(null);
@@ -545,6 +548,21 @@ export default function PlantProfile() {
     }
   };
 
+  const openSlideshow = (index: number) => {
+    if (photoSelectMode || photos.length === 0) return;
+    setSlideshowIndex(index);
+  };
+
+  const showOlderPhoto = () => {
+    if (photos.length === 0 || slideshowIndex === null) return;
+    setSlideshowIndex((slideshowIndex + 1) % photos.length);
+  };
+
+  const showNewerPhoto = () => {
+    if (photos.length === 0 || slideshowIndex === null) return;
+    setSlideshowIndex((slideshowIndex - 1 + photos.length) % photos.length);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-desert-page dark:bg-zinc-950">
@@ -562,6 +580,7 @@ export default function PlantProfile() {
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
+  const slideshowPhoto = slideshowIndex !== null ? photos[slideshowIndex] : null;
 
   return (
     <div className="min-h-screen bg-desert-page dark:bg-zinc-950 text-desert-ink dark:text-white">
@@ -738,7 +757,7 @@ export default function PlantProfile() {
             </Card>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
-              {photos.map((photo) => {
+              {photos.map((photo, index) => {
                 const isProfile = plant.photo_url === photo.photo_url;
                 const isSelected = selectedPhotoIds.has(photo.id);
                 const busy = busyId === photo.id;
@@ -770,11 +789,19 @@ export default function PlantProfile() {
                         </button>
                       )}
 
-                      <img
-                        src={photo.photo_url}
-                        alt=""
-                        className="aspect-square w-full object-cover"
-                      />
+                      <button
+                        type="button"
+                        className="w-full"
+                        onClick={() => openSlideshow(index)}
+                        disabled={photoSelectMode}
+                        aria-label={`Open photo from ${format(new Date(photo.created_at), 'MMMM d, yyyy h:mm a')}`}
+                      >
+                        <img
+                          src={photo.photo_url}
+                          alt=""
+                          className="aspect-square w-full object-cover"
+                        />
+                      </button>
 
                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-6">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1248,6 +1275,70 @@ export default function PlantProfile() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={slideshowIndex !== null && !!slideshowPhoto}
+        onOpenChange={(open) => {
+          if (!open) setSlideshowIndex(null);
+        }}
+      >
+        <DialogContent className="w-[min(96vw,980px)] max-w-[96vw] p-0 overflow-hidden">
+          {slideshowPhoto ? (
+            <div className="flex flex-col bg-black text-white">
+              <div className="flex items-center justify-between gap-3 border-b border-white/20 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {format(new Date(slideshowPhoto.created_at), 'MMMM d, yyyy • h:mm a')}
+                  </p>
+                  <p className="text-xs text-zinc-300">
+                    Photo {slideshowIndex! + 1} of {photos.length}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                    onClick={() => showNewerPhoto()}
+                    disabled={photos.length < 2}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Newer
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                    onClick={() => showOlderPhoto()}
+                    disabled={photos.length < 2}
+                  >
+                    Older
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                    onClick={() => setSlideshowIndex(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center justify-center bg-black p-2 sm:p-4">
+                <img
+                  src={slideshowPhoto.photo_url}
+                  alt={`${plant.name} timeline photo`}
+                  className="max-h-[80vh] w-auto max-w-full object-contain"
+                />
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 
