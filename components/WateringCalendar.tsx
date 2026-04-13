@@ -26,7 +26,7 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
   const daysWithPlants = rows.filter((r) => r.plants.length > 0).length;
 
   return (
-    <Card className="mb-10 border-sky-800/20 bg-gradient-to-br from-sky-50/90 to-desert-parchment dark:from-sky-950/35 dark:to-zinc-900 dark:border-sky-900/40">
+    <Card className="mb-10 border-sky-800/20 bg-gradient-to-br from-sky-50/90 to-desert-parchment dark:from-sky-950/35 dark:to-desert-parchment dark:border-sky-900/40">
       <CardHeader className="pb-2">
         <button
           type="button"
@@ -42,16 +42,16 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
               Watering — next {numDays} days
             </CardTitle>
             {open ? (
-              <p className="text-sm text-desert-dust dark:text-zinc-400">
+              <p className="text-sm text-desert-dust">
                 Based on each plant’s last watered date and water-every interval. {rangeLabel}. If a plant had no
                 last watered date, it shows on the first day only — set dates on the plant or profile after you
                 water.
               </p>
             ) : (
-              <p className="text-sm text-desert-dust dark:text-zinc-500">
+              <p className="text-sm text-desert-dust">
                 {rangeLabel}
                 {daysWithPlants > 0 ? (
-                  <span className="text-desert-sage dark:text-zinc-400">
+                  <span className="text-desert-sage">
                     {' '}
                     · {daysWithPlants} day{daysWithPlants === 1 ? '' : 's'} with plants due
                   </span>
@@ -61,7 +61,7 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
           </div>
           <ChevronDown
             className={cn(
-              'mt-1 h-5 w-5 shrink-0 text-desert-dust transition-transform dark:text-zinc-400',
+              'mt-1 h-5 w-5 shrink-0 text-desert-dust transition-transform',
               open && 'rotate-180',
             )}
             aria-hidden
@@ -79,7 +79,7 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
                 'rounded-2xl border px-3 py-3 sm:px-4',
                 isToday
                   ? 'border-sky-500/60 bg-sky-50/90 dark:border-sky-500/40 dark:bg-sky-950/50'
-                  : 'border-desert-mist/80 bg-white/60 dark:border-zinc-700 dark:bg-zinc-800/40',
+                  : 'border-desert-mist/80 bg-white/60 dark:border-desert-border dark:bg-desert-dune/45',
               )}
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -89,7 +89,7 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
                     dateTime={row.dateKey}
                     className={cn(
                       'text-sm font-semibold',
-                      isToday ? 'text-sky-800 dark:text-sky-200' : 'text-desert-ink dark:text-zinc-200',
+                      isToday ? 'text-sky-800 dark:text-sky-200' : 'text-desert-ink',
                     )}
                   >
                     {format(row.at, 'EEEE, MMM d')}
@@ -102,14 +102,14 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
                 </div>
                 <div className="min-w-0 flex-1">
                   {row.plants.length === 0 ? (
-                    <p className="text-sm text-desert-dust dark:text-zinc-500">Nothing scheduled</p>
+                    <p className="text-sm text-desert-dust">Nothing scheduled</p>
                   ) : (
                     <ul className="flex flex-wrap gap-1.5">
                       {row.plants.map((p) => (
                         <li key={p.id}>
                           <Link
                             href={`/plant/${p.id}`}
-                            className="inline-flex items-center rounded-full border border-desert-border bg-white/90 px-2.5 py-1 text-xs font-medium text-oasis hover:bg-sky-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-emerald-400 dark:hover:bg-zinc-700"
+                            className="inline-flex items-center rounded-full border border-desert-border bg-white/90 px-2.5 py-1 text-xs font-medium text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50"
                           >
                             {p.name}
                           </Link>

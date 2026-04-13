@@ -11,11 +11,11 @@ export const metadata: Metadata = {
 
 export default function OfflinePage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-desert-page px-6 text-center text-desert-ink dark:bg-zinc-950 dark:text-zinc-100">
-      <WifiOff className="h-14 w-14 text-oasis dark:text-emerald-400" aria-hidden />
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-desert-page px-6 text-center text-desert-ink">
+      <WifiOff className="h-14 w-14 text-oasis" aria-hidden />
       <div className="max-w-md space-y-2">
-        <h1 className="text-2xl font-semibold text-oasis dark:text-emerald-400">You&apos;re offline</h1>
-        <p className="text-sm text-desert-dust dark:text-zinc-400">
+        <h1 className="text-2xl font-semibold text-oasis">You&apos;re offline</h1>
+        <p className="text-sm text-desert-dust">
           This page isn&apos;t available without a network connection. Reconnect and try again — cached
           screens may still work if you&apos;ve opened them before.
         </p>
@@ -24,7 +24,7 @@ export default function OfflinePage() {
         href="/"
         className={cn(
           buttonVariants({ variant: "default", size: "default" }),
-          "bg-oasis text-white hover:bg-oasis-hover dark:bg-emerald-600 dark:hover:bg-emerald-500",
+          "bg-oasis text-white hover:bg-oasis-hover",
         )}
       >
         Back to garden

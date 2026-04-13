@@ -37,8 +37,8 @@ export function FertilizerSeasonCheckboxes({ value, onChange, disabled, idPrefix
             className={cn(
               'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors',
               checked
-                ? 'border-oasis bg-oasis/10 text-oasis dark:border-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-300'
-                : 'border-desert-border bg-white/40 text-desert-sage dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400',
+                ? 'border-oasis bg-oasis/10 text-oasis'
+                : 'border-desert-border bg-white/40 text-desert-sage dark:bg-desert-dune/50',
               disabled && 'cursor-not-allowed opacity-50',
             )}
           >
