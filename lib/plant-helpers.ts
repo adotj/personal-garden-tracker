@@ -1,7 +1,39 @@
+import { format, isValid, parseISO } from 'date-fns';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
 
 const SUN_EXPOSURE_SET = new Set<string>(['full_sun', 'partial_sun', 'partial_shade', 'full_shade']);
+
+/** UTC instant when the user taps “watered” (store in DB as timestamptz when supported). */
+export function wateringLoggedAtIso(): string {
+  return new Date().toISOString();
+}
+
+function isDateOnlyIsoString(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
+}
+
+/**
+ * Show last watered/fertilized: calendar-only values stay date-only; full ISO shows local time too.
+ */
+export function formatPlantCareInstant(iso: string | null, variant: 'card' | 'profile'): string {
+  if (!iso?.trim()) return 'Never';
+  const s = iso.trim();
+  const d = parseISO(s);
+  if (!isValid(d)) return 'Never';
+  if (isDateOnlyIsoString(s)) {
+    return variant === 'card' ? format(d, 'MMM d') : format(d, 'MMMM d, yyyy');
+  }
+  return variant === 'card' ? format(d, 'MMM d, h:mm a') : format(d, 'MMMM d, yyyy • h:mm a');
+}
+
+/** `type="date"` input value from a stored date or ISO timestamp. */
+export function isoOrDateToDateInputValue(s: string | null | undefined): string {
+  if (!s?.trim()) return '';
+  const t = s.trim();
+  if (t.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+  return '';
+}
 
 export function normalizeSunExposure(raw: unknown): SunExposure {
   const s = typeof raw === 'string' ? raw : '';

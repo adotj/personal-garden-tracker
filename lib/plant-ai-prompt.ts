@@ -1,6 +1,7 @@
 import { format, isValid, parseISO } from 'date-fns';
 import type { Plant, PlantNoteEntry } from '@/lib/plant-types';
 import { sunExposureLabel } from '@/lib/plant-types';
+import { formatPlantCareInstant } from '@/lib/plant-helpers';
 import {
   fertilizerUrgency,
   formatNextFertilizationDue,
@@ -56,7 +57,9 @@ export function buildPlantTroubleshootingPrompt(
   lines.push('');
   lines.push('## Watering');
   lines.push(`- **Scheduled interval:** every ${plant.watering_frequency_days} day(s)`);
-  lines.push(`- **Last watered (recorded):** ${fmtDay(plant.last_watered)}`);
+  lines.push(
+    `- **Last watered (recorded):** ${plant.last_watered ? formatPlantCareInstant(plant.last_watered, 'profile') : 'Not recorded'}`,
+  );
   lines.push('');
   lines.push('## Fertilizing');
   const seasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
