@@ -2,15 +2,19 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { supabase } from '../lib/supabase';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
 import {
+  formatPlantCareInstant,
+  isoOrDateToDateInputValue,
   normalizePlantRow,
   plantInsertCorePayload,
   plantInsertExtendedPatch,
   plantUpdatePayload,
   normalizeSunExposure,
+  wateringLoggedAtIso,
 } from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
@@ -39,7 +43,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image, Loader2, X, Sprout, Search, CalendarRange } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image as ImageIcon, Loader2, X, Sprout, Search, CalendarRange } from 'lucide-react';
 import { format, addDays, differenceInDays, formatDistanceToNow, isValid, parseISO } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
@@ -613,16 +617,19 @@ export default function LaveenGardenTracker() {
 
   const markWatered = async (id: string, name: string) => {
     if (isWriteDisabled) return;
-    const today = new Date().toISOString().split('T')[0];
-    await supabase.from('plants').update({ last_watered: today }).eq('id', id);
-    const todayLabel = isValid(parseISO(today)) ? format(parseISO(today), 'MMMM d, yyyy') : today;
-    await logActivity(
-      'Plant Watered',
-      name,
-      `Last watered on this plant’s record is now ${todayLabel}.`,
-    );
-    toast.success(`✅ ${name} watered today!`);
-    fetchPlants();        // ← Refresh to show updated date
+    const when = wateringLoggedAtIso();
+    const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', id);
+    if (error) {
+      const parts = [error.message, error.details, error.hint].filter(
+        (s): s is string => typeof s === 'string' && s.trim().length > 0,
+      );
+      toast.error(parts.length > 0 ? parts.join(' — ') : 'Could not mark watered');
+      return;
+    }
+    const whenLabel = formatPlantCareInstant(when, 'profile');
+    await logActivity('Plant Watered', name, `Last watered on this plant’s record is now ${whenLabel}.`);
+    toast.success(`✅ ${name} marked watered`);
+    fetchPlants();
     fetchActivities();
   };
 
@@ -943,7 +950,7 @@ export default function LaveenGardenTracker() {
                     <Label>Homepage photo (optional)</Label>
                     <p className="text-xs text-desert-dust dark:text-zinc-500 mb-2">Shown on the garden grid; add more on the plant profile.</p>
                     <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(false)} disabled={isDemoMode || isUploading}>
-                      {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
+                      {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImageIcon className="h-5 w-5" />}
                       {isUploading ? 'Uploading Photo...' : 'Choose Photo'}
                     </Button>
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e)} className="hidden" />
@@ -1185,8 +1192,16 @@ export default function LaveenGardenTracker() {
                   />
                   <div className="relative z-10 pointer-events-none">
                     {plant.photo_url ? (
-                      <div className="h-52 w-full overflow-hidden bg-desert-dune dark:bg-zinc-800">
-                        <img src={plant.photo_url} alt="" className="h-full w-full object-cover" />
+                      <div className="h-52 w-full overflow-hidden bg-desert-dune dark:bg-zinc-800 relative">
+                        <Image
+                          src={plant.photo_url}
+                          alt={plant.name}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          priority={false}
+                          quality={75}
+                        />
                       </div>
                     ) : (
                       <div className="flex h-40 items-center justify-center bg-desert-dune text-sm text-desert-dust dark:bg-zinc-800 dark:text-zinc-500">
@@ -1206,7 +1221,7 @@ export default function LaveenGardenTracker() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="text-sm text-desert-sage dark:text-zinc-400 space-y-1">
-                        <p>Water: {safeFormatDay(plant.last_watered)}
+                        <p>Water: {formatPlantCareInstant(plant.last_watered, 'card')}
                            <span className={showWaterDue ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
                              → Due {safeFormatDue(plant.last_watered, plant.watering_frequency_days)}
                            </span>
@@ -1410,7 +1425,7 @@ export default function LaveenGardenTracker() {
                   <Label>Last watered</Label>
                   <Input
                     type="date"
-                    value={editingPlant.last_watered ?? ''}
+                    value={isoOrDateToDateInputValue(editingPlant.last_watered)}
                     onChange={(e) =>
                       setEditingPlant({
                         ...editingPlant,
@@ -1423,7 +1438,7 @@ export default function LaveenGardenTracker() {
                   <Label>Last fertilized</Label>
                   <Input
                     type="date"
-                    value={editingPlant.last_fertilized ?? ''}
+                    value={isoOrDateToDateInputValue(editingPlant.last_fertilized)}
                     onChange={(e) =>
                       setEditingPlant({
                         ...editingPlant,
@@ -1460,7 +1475,7 @@ export default function LaveenGardenTracker() {
                 <Label>Homepage photo</Label>
                 <p className="text-xs text-desert-dust dark:text-zinc-500 mb-2">Replaces the card image; previous shots stay in the profile timeline when you save.</p>
                 <Button type="button" variant="outline" className="w-full flex items-center justify-center gap-2 py-6" onClick={() => triggerFileInput(true)} disabled={isDemoMode || isUploading}>
-                  {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Image className="h-5 w-5" />}
+                      {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImageIcon className="h-5 w-5" />}
                   {isUploading ? 'Uploading Photo...' : 'Choose New Photo'}
                 </Button>
                 <input ref={editFileInputRef} type="file" accept="image/*" onChange={(e) => handlePhotoUpload(e, true)} className="hidden" />

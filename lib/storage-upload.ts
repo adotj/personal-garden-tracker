@@ -9,7 +9,7 @@ export async function uploadPlantImage(file: File): Promise<string | null> {
     const { error } = await supabase.storage
       .from('plant-photos')
       .upload(fileName, file, {
-        cacheControl: '3600',
+        cacheControl: '31536000, immutable', // 1 year + immutable for aggressive long-term browser caching
         upsert: false,
       });
 

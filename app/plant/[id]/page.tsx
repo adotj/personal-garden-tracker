@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '@/lib/plant-types';
 import { sunExposureLabel } from '@/lib/plant-types';
-import { normalizePlantRow } from '@/lib/plant-helpers';
+import { formatPlantCareInstant, normalizePlantRow, wateringLoggedAtIso } from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
   fertilizerUrgency,
@@ -206,8 +207,8 @@ export default function PlantProfile() {
     if (!plant || isWriteDisabled) return;
     setCareBusy('water');
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const { error } = await supabase.from('plants').update({ last_watered: today }).eq('id', plantId);
+      const when = wateringLoggedAtIso();
+      const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', plantId);
       if (error) throw error;
       await logActivityDb('Plant Watered', plant.name);
       toast.success(`${plant.name} watered`);
@@ -648,11 +649,15 @@ export default function PlantProfile() {
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
               <ImageIcon className="h-5 w-5" /> Profile picture
             </h2>
-            <div className="relative rounded-3xl overflow-hidden border border-desert-border dark:border-zinc-700 shadow-sm">
-              <img
+            <div className="relative rounded-3xl overflow-hidden border border-desert-border dark:border-zinc-700 shadow-sm" style={{ maxHeight: 'min(420px, 55vh)' }}>
+              <Image
                 src={plant.photo_url}
                 alt={plant.name}
-                className="w-full max-h-[min(420px,55vh)] object-cover"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 800px"
+                priority
+                quality={80}
               />
             </div>
             <p className="mt-2 text-sm text-desert-dust dark:text-zinc-500">
@@ -796,7 +801,7 @@ export default function PlantProfile() {
                         : 'border-desert-border dark:border-zinc-700',
                     )}
                   >
-                    <div className="relative group shrink-0">
+                    <div className="relative group shrink-0 aspect-square">
                       {photoSelectMode && (
                         <button
                           type="button"
@@ -812,17 +817,21 @@ export default function PlantProfile() {
                         </button>
                       )}
 
+<<<<<<< HEAD
                       <button
                         type="button"
-                        className="w-full"
+                        className="w-full relative aspect-square"
                         onClick={() => openSlideshow(index)}
                         disabled={photoSelectMode}
                         aria-label={`Open photo from ${format(new Date(photo.created_at), 'MMMM d, yyyy h:mm a')}`}
                       >
-                        <img
+                        <Image
                           src={photo.photo_url}
                           alt=""
-                          className="aspect-square w-full object-cover"
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 768px) 50vw, 33vw"
+                          quality={70}
                         />
                       </button>
 
@@ -909,7 +918,7 @@ export default function PlantProfile() {
                     Last watered
                   </p>
                   <p className="text-lg font-semibold text-desert-ink dark:text-white">
-                    {formatCareDay(plant.last_watered)}
+                    {formatPlantCareInstant(plant.last_watered, 'profile')}
                   </p>
                   <p className="text-sm text-desert-sage dark:text-zinc-400">
                     Every {plant.watering_frequency_days} day{plant.watering_frequency_days === 1 ? '' : 's'} ·{' '}

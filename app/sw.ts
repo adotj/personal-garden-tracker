@@ -3,6 +3,7 @@
 import { defaultCache } from "@serwist/turbopack/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
 import { Serwist } from "serwist";
+import { CacheFirst, ExpirationPlugin } from "serwist";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -17,7 +18,21 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: defaultCache,
+  runtimeCaching: [
+    ...defaultCache,
+    {
+      matcher: ({ request }) => request.destination === "image",
+      handler: new CacheFirst({
+        cacheName: "images",
+        plugins: [
+          new ExpirationPlugin({
+            maxEntries: 200,
+            maxAgeSeconds: 31536000, // 1 year aggressive caching for plant photos
+          }),
+        ],
+      }),
+    },
+  ],
   fallbacks: {
     entries: [
       {
