@@ -649,7 +649,9 @@ export default function PlantProfile() {
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
               <ImageIcon className="h-5 w-5" /> Profile picture
             </h2>
-            <div className="relative rounded-3xl overflow-hidden border border-desert-border shadow-sm" style={{ maxHeight: 'min(420px, 55vh)' }}>
+            <div
+              className="relative h-[min(420px,55vh)] min-h-[220px] w-full rounded-3xl overflow-hidden border border-desert-border shadow-sm"
+            >
               <Image
                 src={plant.photo_url}
                 alt={plant.name}
