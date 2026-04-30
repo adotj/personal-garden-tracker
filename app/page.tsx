@@ -1344,9 +1344,30 @@ export default function LaveenGardenTracker() {
               return (
                 <Card
                   key={plant.id}
-                  className="border border-desert-border bg-desert-parchment/95 shadow-sm"
+                  className="overflow-hidden border border-desert-border bg-desert-parchment/95 shadow-sm"
                 >
                   <CardContent className="space-y-2 p-3">
+                    {plant.photo_url ? (
+                      <Link
+                        href={`/plant/${plant.id}`}
+                        className="relative block h-20 overflow-hidden rounded-lg bg-desert-dune"
+                        aria-label={`Open ${plant.name} profile`}
+                      >
+                        <Image
+                          src={plant.photo_url}
+                          alt={plant.name}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                          priority={false}
+                          quality={70}
+                        />
+                      </Link>
+                    ) : (
+                      <div className="flex h-20 items-center justify-center rounded-lg bg-desert-dune text-[11px] text-desert-dust">
+                        No photo
+                      </div>
+                    )}
                     <Link
                       href={`/plant/${plant.id}`}
                       className="line-clamp-2 text-sm font-semibold leading-tight text-oasis hover:underline"
