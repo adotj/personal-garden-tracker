@@ -39,18 +39,18 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  /* Desert oasis — dimmed sand & stone (low luminance, easy on eyes) */
-  --color-desert-page: #c4bbb0;
-  --color-desert-parchment: #cec5b8;
-  --color-desert-mist: #bcb3a5;
-  --color-desert-dune: #b5aca0;
-  --color-desert-ridge: #a69d90;
-  --color-desert-border: #8a8170;
-  --color-desert-ink: #2f2b26;
-  --color-desert-sage: #4a524f;
-  --color-desert-dust: #6f6a64;
-  --color-oasis: #0d4f27;
-  --color-oasis-hover: #145e32;
+  /* Desert palette tokens are variable-backed so dark mode can override at runtime */
+  --color-desert-page: var(--desert-page);
+  --color-desert-parchment: var(--desert-parchment);
+  --color-desert-mist: var(--desert-mist);
+  --color-desert-dune: var(--desert-dune);
+  --color-desert-ridge: var(--desert-ridge);
+  --color-desert-border: var(--desert-border);
+  --color-desert-ink: var(--desert-ink);
+  --color-desert-sage: var(--desert-sage);
+  --color-desert-dust: var(--desert-dust);
+  --color-oasis: var(--oasis);
+  --color-oasis-hover: var(--oasis-hover);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -61,6 +61,7 @@
 }
 
 :root {
+  color-scheme: light;
   /* Deeper sand field — muted, low-glare; cards barely lift from page */
   --background: oklch(0.78 0.02 95);
   --foreground: oklch(0.3 0.022 85);
@@ -94,10 +95,22 @@
   --sidebar-accent-foreground: oklch(0.3 0.022 85);
   --sidebar-border: oklch(0.68 0.018 90);
   --sidebar-ring: oklch(0.48 0.08 145);
+  --desert-page: #c4bbb0;
+  --desert-parchment: #cec5b8;
+  --desert-mist: #bcb3a5;
+  --desert-dune: #b5aca0;
+  --desert-ridge: #a69d90;
+  --desert-border: #8a8170;
+  --desert-ink: #2f2b26;
+  --desert-sage: #4a524f;
+  --desert-dust: #6f6a64;
+  --oasis: #0d4f27;
+  --oasis-hover: #145e32;
 }
 
 /* Night desert — warm neutrals + oasis green (matches light brand, not default zinc) */
 .dark {
+  color-scheme: dark;
   --background: oklch(0.2 0.012 88);
   --foreground: oklch(0.94 0.01 95);
   --card: oklch(0.24 0.014 90);
@@ -131,17 +144,17 @@
   --sidebar-ring: oklch(0.52 0.09 150);
 
   /* Brand desert ramp — same tokens as light, tuned for dark UI */
-  --color-desert-page: oklch(0.2 0.012 88);
-  --color-desert-parchment: oklch(0.24 0.014 90);
-  --color-desert-mist: oklch(0.32 0.014 88);
-  --color-desert-dune: oklch(0.28 0.012 88);
-  --color-desert-ridge: oklch(0.36 0.016 88);
-  --color-desert-border: oklch(0.4 0.014 86);
-  --color-desert-ink: oklch(0.94 0.01 95);
-  --color-desert-sage: oklch(0.72 0.03 155);
-  --color-desert-dust: oklch(0.68 0.018 88);
-  --color-oasis: oklch(0.62 0.12 150);
-  --color-oasis-hover: oklch(0.68 0.11 150);
+  --desert-page: oklch(0.2 0.012 88);
+  --desert-parchment: oklch(0.24 0.014 90);
+  --desert-mist: oklch(0.32 0.014 88);
+  --desert-dune: oklch(0.28 0.012 88);
+  --desert-ridge: oklch(0.36 0.016 88);
+  --desert-border: oklch(0.4 0.014 86);
+  --desert-ink: oklch(0.94 0.01 95);
+  --desert-sage: oklch(0.72 0.03 155);
+  --desert-dust: oklch(0.68 0.018 88);
+  --oasis: oklch(0.62 0.12 150);
+  --oasis-hover: oklch(0.68 0.11 150);
 }
 
 @layer base {
