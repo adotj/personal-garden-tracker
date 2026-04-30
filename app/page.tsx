@@ -74,6 +74,8 @@ type NewPlantForm = {
   photo_url: string | null;
 };
 
+type PlantViewMode = 'list' | 'table';
+
 function safeFormatDay(iso: string | null): string {
   if (!iso) return 'Never';
   const d = new Date(iso);
@@ -165,6 +167,7 @@ export default function LaveenGardenTracker() {
   const [isUploading, setIsUploading] = useState(false);
   const [plantSearch, setPlantSearch] = useState('');
   const [fertDueThisMonthOnly, setFertDueThisMonthOnly] = useState(false);
+  const [plantViewMode, setPlantViewMode] = useState<PlantViewMode>('list');
   const editPhotoBaselineRef = useRef<string | null>(null);
 
   const [newPlant, setNewPlant] = useState<NewPlantForm>({
@@ -1016,6 +1019,42 @@ export default function LaveenGardenTracker() {
                 <CalendarRange className="mr-1.5 h-4 w-4" />
                 Due this month
               </Button>
+              <div
+                className="flex h-10 shrink-0 items-center rounded-full border border-desert-border/50 bg-desert-parchment/70 p-1"
+                role="group"
+                aria-label="Plant view mode"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={plantViewMode === 'list' ? 'default' : 'ghost'}
+                  className={cn(
+                    'h-8 rounded-full px-3 text-xs sm:text-sm',
+                    plantViewMode === 'list'
+                      ? 'bg-oasis text-white hover:bg-oasis-hover'
+                      : 'text-desert-sage hover:text-desert-ink',
+                  )}
+                  onClick={() => setPlantViewMode('list')}
+                  aria-pressed={plantViewMode === 'list'}
+                >
+                  List
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={plantViewMode === 'table' ? 'default' : 'ghost'}
+                  className={cn(
+                    'h-8 rounded-full px-3 text-xs sm:text-sm',
+                    plantViewMode === 'table'
+                      ? 'bg-oasis text-white hover:bg-oasis-hover'
+                      : 'text-desert-sage hover:text-desert-ink',
+                  )}
+                  onClick={() => setPlantViewMode('table')}
+                  aria-pressed={plantViewMode === 'table'}
+                >
+                  Table
+                </Button>
+              </div>
               <div className="relative min-w-0 flex-1">
                 <label htmlFor="garden-plant-filter" className="sr-only">
                   Search plants by name
@@ -1175,6 +1214,112 @@ export default function LaveenGardenTracker() {
               </div>
             </CardContent>
           </Card>
+        ) : plantViewMode === 'table' ? (
+          <div className="mb-16 overflow-hidden rounded-3xl border border-desert-border bg-desert-parchment shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-desert-dune/60 text-left text-desert-sage">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Plant</th>
+                    <th className="px-4 py-3 font-semibold">Container</th>
+                    <th className="px-4 py-3 font-semibold">Watering</th>
+                    <th className="px-4 py-3 font-semibold">Fertilizer</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPlants.map((plant) => {
+                    const showWaterDue = waterDueSoon(plant);
+                    const fertU = fertilizerUrgency(plant);
+                    const showFertStress = fertilizerDueSoonOrOverdue(plant);
+                    const waterDueLabel = safeFormatDue(plant.last_watered, plant.watering_frequency_days);
+
+                    return (
+                      <tr key={plant.id} className="border-t border-desert-mist align-top">
+                        <td className="px-4 py-3">
+                          <Link href={`/plant/${plant.id}`} className="font-semibold text-oasis hover:underline">
+                            {plant.name}
+                          </Link>
+                          <p className="mt-1 text-xs text-desert-dust">Sun: {sunExposureLabel(plant.sun_exposure)}</p>
+                        </td>
+                        <td className="px-4 py-3 text-desert-sage">
+                          {plant.container_type} • {plant.pot_size}
+                        </td>
+                        <td className="px-4 py-3 text-desert-sage">
+                          <p>{formatPlantCareInstant(plant.last_watered, 'card')}</p>
+                          <p className={cn('mt-1 text-xs', showWaterDue ? 'font-medium text-orange-600 dark:text-orange-400' : 'text-desert-dust')}>
+                            Due {waterDueLabel || '—'}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-desert-sage">
+                          <p>Last: {safeFormatDay(plant.last_fertilized)}</p>
+                          <p className={cn('mt-1 text-xs', showFertStress ? 'font-medium text-orange-600 dark:text-orange-400' : 'text-desert-dust')}>
+                            Next: {formatNextFertilizationDue(plant)}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {fertU === 'off_season' ? (
+                              <Badge variant="secondary" className="text-xs font-normal">
+                                Off-season
+                              </Badge>
+                            ) : null}
+                            {fertU === 'overdue' ? (
+                              <Badge className="bg-red-600 text-xs text-white hover:bg-red-600">Fertilize now</Badge>
+                            ) : null}
+                            {fertU === 'due_soon' ? (
+                              <Badge className="bg-amber-600 text-xs text-white hover:bg-amber-600">Due soon</Badge>
+                            ) : null}
+                            {fertU === 'due_month' ? (
+                              <Badge variant="outline" className="border-amber-600 text-xs text-amber-800 dark:text-amber-300">
+                                Due this month
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => markWatered(plant.id, plant.name)}
+                              disabled={isDemoMode}
+                              className="rounded-full bg-oasis text-white hover:bg-oasis-hover"
+                            >
+                              <Droplet className="mr-1 h-4 w-4" /> Watered
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => markFertilized(plant.id, plant.name)}
+                              disabled={isDemoMode}
+                              className="rounded-full bg-amber-600 text-white hover:bg-amber-700"
+                            >
+                              <Sprout className="mr-1 h-4 w-4" /> Fertilized
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => openEditModal(plant)}
+                              disabled={isDemoMode}
+                              className="border-desert-border"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="border-desert-border text-red-600"
+                              onClick={() => deletePlant(plant.id, plant.name)}
+                              disabled={isDemoMode}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
             {filteredPlants.map((plant) => {
