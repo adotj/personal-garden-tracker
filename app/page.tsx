@@ -1127,13 +1127,13 @@ export default function LaveenGardenTracker() {
         )}
 
         {plants.length > 0 && fertilizerUpcoming.length > 0 ? (
-          <Card className="mb-10 border-amber-700/30 bg-gradient-to-br from-amber-50/90 to-desert-parchment dark:from-amber-950/40 dark:to-desert-parchment dark:border-amber-900/40">
+          <Card className="mb-10 border-amber-700/30 bg-gradient-to-br from-amber-50/90 to-desert-parchment dark:from-amber-950/40 dark:to-zinc-900 dark:border-amber-900/40">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Sprout className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                 Fertilizer — coming up
               </CardTitle>
-              <p className="text-sm text-desert-dust">
+              <p className="text-sm text-desert-dust dark:text-zinc-300">
                 Only counts months you marked as fertilizer seasons. Northern Hemisphere: winter Dec–Feb, spring
                 Mar–May, summer Jun–Aug, fall Sep–Nov.
               </p>
@@ -1150,17 +1150,17 @@ export default function LaveenGardenTracker() {
                       : 'Due later this month';
                 return (
                   <div key={bucket}>
-                    <h3 className="mb-2 text-sm font-semibold text-desert-ink">{title}</h3>
+                    <h3 className="mb-2 text-sm font-semibold text-desert-ink dark:text-zinc-100">{title}</h3>
                     <ul className="space-y-2">
                       {slice.map(({ plant: p, next }) => (
                         <li
                           key={p.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist bg-white/70 px-3 py-2 text-sm"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist bg-white/70 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800/85"
                         >
-                          <Link href={`/plant/${p.id}`} className="font-medium text-oasis hover:underline">
+                          <Link href={`/plant/${p.id}`} className="font-medium text-oasis hover:underline dark:text-emerald-300">
                             {p.name}
                           </Link>
-                          <span className="text-desert-dust">
+                          <span className="text-desert-dust dark:text-zinc-300">
                             Next: {next ? format(next, 'MMM d') : '—'} ·{' '}
                             {p.fertilizer_seasons?.map((s) => seasonLabel(s)).join(', ')}
                           </span>
