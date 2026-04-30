@@ -906,37 +906,37 @@ export default function PlantProfile() {
         </div>
 
         {/* Care summary + last watered / fertilized */}
-        <Card className="bg-desert-parchment border-desert-border">
+        <Card className="bg-desert-parchment border-desert-border dark:bg-zinc-900 dark:border-zinc-700">
           <CardHeader>
             <CardTitle className="text-lg">Care &amp; schedule</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex gap-3 rounded-2xl border border-desert-mist/80 bg-white/50 p-4">
+              <div className="flex gap-3 rounded-2xl border border-desert-mist/80 bg-white/50 p-4 dark:border-zinc-600 dark:bg-zinc-800/85">
                 <Droplet className="h-8 w-8 shrink-0 text-sky-600 dark:text-sky-400" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust dark:text-zinc-300">
                     Last watered
                   </p>
-                  <p className="text-lg font-semibold text-desert-ink">
+                  <p className="text-lg font-semibold text-desert-ink dark:text-zinc-100">
                     {formatPlantCareInstant(plant.last_watered, 'profile')}
                   </p>
-                  <p className="text-sm text-desert-sage">
+                  <p className="text-sm text-desert-sage dark:text-zinc-300">
                     Every {plant.watering_frequency_days} day{plant.watering_frequency_days === 1 ? '' : 's'} ·{' '}
                     {formatDueLine(plant.last_watered, plant.watering_frequency_days) || '—'}
                   </p>
                 </div>
               </div>
-              <div className="flex gap-3 rounded-2xl border border-desert-mist/80 bg-white/50 p-4">
+              <div className="flex gap-3 rounded-2xl border border-desert-mist/80 bg-white/50 p-4 dark:border-zinc-600 dark:bg-zinc-800/85">
                 <Sprout className="h-8 w-8 shrink-0 text-amber-700 dark:text-amber-400" />
                 <div className="min-w-0 flex-1 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust dark:text-zinc-300">
                     Last fertilized
                   </p>
-                  <p className="text-lg font-semibold text-desert-ink">
+                  <p className="text-lg font-semibold text-desert-ink dark:text-zinc-100">
                     {formatCareDay(plant.last_fertilized)}
                   </p>
-                  <p className="text-sm text-desert-sage">
+                  <p className="text-sm text-desert-sage dark:text-zinc-300">
                     Every {plant.fertilizer_frequency_days} day
                     {plant.fertilizer_frequency_days === 1 ? '' : 's'} · Next (in active seasons):{' '}
                     <span
@@ -949,7 +949,7 @@ export default function PlantProfile() {
                       {formatNextFertilizationDue(plant)}
                     </span>
                   </p>
-                  <p className="text-xs text-desert-dust">
+                  <p className="text-xs text-desert-dust dark:text-zinc-300">
                     Fertilize in: {plantSeasons.map(seasonLabel).join(', ')}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -973,7 +973,7 @@ export default function PlantProfile() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 border-t border-desert-mist/60 pt-4">
+            <div className="flex flex-wrap gap-2 border-t border-desert-mist/60 pt-4 dark:border-zinc-700">
               <Button
                 type="button"
                 className="rounded-full bg-oasis hover:bg-oasis-hover"
@@ -1007,13 +1007,13 @@ export default function PlantProfile() {
           </CardContent>
         </Card>
 
-        <Card className="bg-desert-parchment border-desert-border">
+        <Card className="bg-desert-parchment border-desert-border dark:bg-zinc-900 dark:border-zinc-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <NotebookPen className="h-5 w-5 text-oasis" />
+              <NotebookPen className="h-5 w-5 text-oasis dark:text-emerald-400" />
               Plant notes
             </CardTitle>
-            <p className="text-sm text-desert-dust">
+            <p className="text-sm text-desert-dust dark:text-zinc-300">
               Each time you add a note it is saved with a timestamp. Delete entries you no longer need. Everyone
               using the same garden sees the same journal.
             </p>
@@ -1041,20 +1041,20 @@ export default function PlantProfile() {
             </div>
 
             {plant.notes?.trim() ? (
-              <div className="rounded-2xl border border-dashed border-desert-border bg-white/40 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust">
+              <div className="rounded-2xl border border-dashed border-desert-border bg-white/40 p-4 dark:border-zinc-600 dark:bg-zinc-800/80">
+                <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust dark:text-zinc-300">
                   Earlier note (from before journal entries)
                 </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-desert-sage">
+                <p className="mt-2 whitespace-pre-wrap text-sm text-desert-sage dark:text-zinc-100">
                   {plant.notes.trim()}
                 </p>
               </div>
             ) : null}
 
             <div>
-              <p className="mb-2 text-sm font-medium text-desert-ink">History</p>
+              <p className="mb-2 text-sm font-medium text-desert-ink dark:text-zinc-100">History</p>
               {plantNoteEntries.length === 0 ? (
-                <p className="rounded-xl border border-desert-mist/60 bg-white/50 py-10 text-center text-sm text-desert-dust">
+                <p className="rounded-xl border border-desert-mist/60 bg-white/50 py-10 text-center text-sm text-desert-dust dark:border-zinc-600 dark:bg-zinc-800/85 dark:text-zinc-200">
                   No journal entries yet. Add your first note above.
                 </p>
               ) : (
@@ -1062,12 +1062,12 @@ export default function PlantProfile() {
                   {plantNoteEntries.map((entry) => (
                     <li
                       key={entry.id}
-                      className="rounded-2xl border border-desert-mist/70 bg-white/70 p-4"
+                      className="rounded-2xl border border-desert-mist/70 bg-white/70 p-4 dark:border-zinc-600 dark:bg-zinc-800/85"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <time
                           dateTime={entry.created_at}
-                          className="shrink-0 text-xs font-medium text-desert-dust"
+                          className="shrink-0 text-xs font-medium text-desert-dust dark:text-zinc-300"
                         >
                           {formatLogWhen(entry.created_at)}
                         </time>
@@ -1087,7 +1087,7 @@ export default function PlantProfile() {
                           )}
                         </Button>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-desert-ink">
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-desert-ink dark:text-zinc-100">
                         {entry.body}
                       </p>
                     </li>
@@ -1102,13 +1102,13 @@ export default function PlantProfile() {
           </CardContent>
         </Card>
 
-        <Card className="bg-desert-parchment border-desert-border">
+        <Card className="bg-desert-parchment border-desert-border dark:bg-zinc-900 dark:border-zinc-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Sprout className="h-5 w-5 text-amber-600" />
               Fertilizer schedule
             </CardTitle>
-            <p className="text-sm text-desert-dust">
+            <p className="text-sm text-desert-dust dark:text-zinc-300">
               Seasons use a simple Northern Hemisphere calendar (e.g. spring = Mar–May). The next due date only
               counts during the seasons you enable.
             </p>
@@ -1162,7 +1162,7 @@ export default function PlantProfile() {
           </CardHeader>
           <CardContent>
             {fertilizerLogs.length === 0 ? (
-              <p className="py-8 text-center text-desert-dust">
+              <p className="py-8 text-center text-desert-dust dark:text-zinc-300">
                 No fertilizer applications logged yet.
               </p>
             ) : (
@@ -1170,13 +1170,13 @@ export default function PlantProfile() {
                 {fertilizerLogs.map((row) => (
                   <li
                     key={row.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist/60 bg-white/60 px-4 py-3 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist/60 bg-white/60 px-4 py-3 text-sm dark:border-zinc-600 dark:bg-zinc-800/85"
                   >
-                    <span className="font-medium text-desert-ink">
+                    <span className="font-medium text-desert-ink dark:text-zinc-100">
                       {formatCareDay(row.applied_on)}
                     </span>
                     {row.notes ? (
-                      <span className="text-xs text-desert-sage">{row.notes}</span>
+                      <span className="text-xs text-desert-sage dark:text-zinc-300">{row.notes}</span>
                     ) : null}
                   </li>
                 ))}
@@ -1186,20 +1186,20 @@ export default function PlantProfile() {
         </Card>
 
         {/* Water / fertilizer log (from activity_logs) */}
-        <Card className="bg-desert-parchment border-desert-border">
+        <Card className="bg-desert-parchment border-desert-border dark:bg-zinc-900 dark:border-zinc-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Droplet className="h-5 w-5 text-sky-600" />
               Water &amp; fertilizer log
             </CardTitle>
-            <p className="text-sm text-desert-dust">
+            <p className="text-sm text-desert-dust dark:text-zinc-300">
               Each line is a time you (or someone) logged watering or fertilizing from this profile or the home
               dashboard. The cards above show the dates saved on the plant.
             </p>
           </CardHeader>
           <CardContent>
             {careLogs.length === 0 ? (
-              <p className="py-8 text-center text-desert-dust">
+              <p className="py-8 text-center text-desert-dust dark:text-zinc-300">
                 No watering or fertilizing events logged for this plant yet.
               </p>
             ) : (
@@ -1207,9 +1207,9 @@ export default function PlantProfile() {
                 {careLogs.map((log) => (
                   <li
                     key={log.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-desert-mist/60 bg-white/60 px-4 py-3 text-sm"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-desert-mist/60 bg-white/60 px-4 py-3 text-sm dark:border-zinc-600 dark:bg-zinc-800/85"
                   >
-                    <span className="font-medium text-desert-ink">
+                    <span className="font-medium text-desert-ink dark:text-zinc-100">
                       {isWaterLogAction(log.action) ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Droplet className="h-4 w-4 text-sky-600" />
@@ -1222,10 +1222,10 @@ export default function PlantProfile() {
                         </span>
                       )}
                     </span>
-                    <span className="mt-0.5 block text-xs font-normal text-desert-dust">
+                    <span className="mt-0.5 block text-xs font-normal text-desert-dust dark:text-zinc-300">
                       {log.action}
                     </span>
-                    <span className="shrink-0 text-xs text-desert-dust">
+                    <span className="shrink-0 text-xs text-desert-dust dark:text-zinc-300">
                       {formatLogWhen(log.created_at)}
                     </span>
                   </li>
@@ -1236,16 +1236,16 @@ export default function PlantProfile() {
         </Card>
 
         {/* Full activity History */}
-        <Card className="bg-desert-parchment border-desert-border">
+        <Card className="bg-desert-parchment border-desert-border dark:bg-zinc-900 dark:border-zinc-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">🌱 All activity</CardTitle>
-            <p className="text-sm text-desert-dust">
+            <p className="text-sm text-desert-dust dark:text-zinc-300">
               Edits, photos, and other actions for this plant.
             </p>
           </CardHeader>
           <CardContent>
             {activities.length === 0 ? (
-              <p className="text-center py-12 text-desert-dust">
+              <p className="text-center py-12 text-desert-dust dark:text-zinc-300">
                 No activity logged for this plant yet.
               </p>
             ) : (
@@ -1253,10 +1253,10 @@ export default function PlantProfile() {
                 {activities.map((log) => (
                   <div
                     key={log.id}
-                    className="flex justify-between items-start gap-3 p-4 bg-white/60 rounded-2xl border border-desert-mist"
+                    className="flex justify-between items-start gap-3 p-4 bg-white/60 rounded-2xl border border-desert-mist dark:border-zinc-600 dark:bg-zinc-800/85"
                   >
                     <div className="font-medium">{log.action}</div>
-                    <div className="text-right text-xs text-desert-dust whitespace-nowrap">
+                    <div className="text-right text-xs text-desert-dust whitespace-nowrap dark:text-zinc-300">
                       {formatLogWhen(log.created_at)}
                     </div>
                   </div>
