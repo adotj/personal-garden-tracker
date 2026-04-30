@@ -74,7 +74,7 @@ type NewPlantForm = {
   photo_url: string | null;
 };
 
-type PlantViewMode = 'list' | 'table';
+type PlantViewMode = 'list' | 'table' | 'grid';
 
 function safeFormatDay(iso: string | null): string {
   if (!iso) return 'Never';
@@ -1054,6 +1054,21 @@ export default function LaveenGardenTracker() {
                 >
                   Table
                 </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={plantViewMode === 'grid' ? 'default' : 'ghost'}
+                  className={cn(
+                    'h-8 rounded-full px-3 text-xs sm:text-sm',
+                    plantViewMode === 'grid'
+                      ? 'bg-oasis text-white hover:bg-oasis-hover'
+                      : 'text-desert-sage hover:text-desert-ink',
+                  )}
+                  onClick={() => setPlantViewMode('grid')}
+                  aria-pressed={plantViewMode === 'grid'}
+                >
+                  Grid
+                </Button>
               </div>
               <div className="relative min-w-0 flex-1">
                 <label htmlFor="garden-plant-filter" className="sr-only">
@@ -1319,6 +1334,72 @@ export default function LaveenGardenTracker() {
                 </tbody>
               </table>
             </div>
+          </div>
+        ) : plantViewMode === 'grid' ? (
+          <div className="mb-16 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {filteredPlants.map((plant) => {
+              const showWaterDue = waterDueSoon(plant);
+              const showFertStress = fertilizerDueSoonOrOverdue(plant);
+
+              return (
+                <Card
+                  key={plant.id}
+                  className="border border-desert-border bg-desert-parchment/95 shadow-sm"
+                >
+                  <CardContent className="space-y-2 p-3">
+                    <Link
+                      href={`/plant/${plant.id}`}
+                      className="line-clamp-2 text-sm font-semibold leading-tight text-oasis hover:underline"
+                    >
+                      {plant.name}
+                    </Link>
+                    <p className="line-clamp-1 text-xs text-desert-dust">
+                      {plant.container_type} • {plant.pot_size}
+                    </p>
+                    <div className="space-y-1 text-[11px]">
+                      <p
+                        className={cn(
+                          showWaterDue
+                            ? 'font-medium text-orange-600 dark:text-orange-400'
+                            : 'text-desert-sage',
+                        )}
+                      >
+                        Water due {safeFormatDue(plant.last_watered, plant.watering_frequency_days) || '—'}
+                      </p>
+                      <p
+                        className={cn(
+                          showFertStress
+                            ? 'font-medium text-orange-600 dark:text-orange-400'
+                            : 'text-desert-sage',
+                        )}
+                      >
+                        Fert {formatNextFertilizationDue(plant)}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5 pt-1">
+                      <Button
+                        size="sm"
+                        onClick={() => markWatered(plant.id, plant.name)}
+                        disabled={isDemoMode}
+                        className="h-7 flex-1 rounded-full px-2 text-xs bg-oasis text-white hover:bg-oasis-hover"
+                      >
+                        <Droplet className="mr-1 h-3.5 w-3.5" />
+                        Water
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => markFertilized(plant.id, plant.name)}
+                        disabled={isDemoMode}
+                        className="h-7 flex-1 rounded-full px-2 text-xs bg-amber-600 text-white hover:bg-amber-700"
+                      >
+                        <Sprout className="mr-1 h-3.5 w-3.5" />
+                        Fert
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
