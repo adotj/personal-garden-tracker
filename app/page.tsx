@@ -620,6 +620,7 @@ export default function LaveenGardenTracker() {
           fertilizer_frequency_days: fertDays,
           fertilizer_seasons: seasons,
           fertilizer_notes: newPlant.fertilizer_notes,
+          location_in_garden: newPlant.location_in_garden,
         }))
         .eq('id', inserted.id);
       if (extErr) {
@@ -1691,6 +1692,11 @@ export default function LaveenGardenTracker() {
                     <p className="line-clamp-1 text-xs text-desert-dust">
                       {plant.container_type} • {plant.pot_size}
                     </p>
+                    {plant.location_in_garden?.trim() ? (
+                      <p className="line-clamp-1 text-[11px] text-desert-dust">
+                        {plant.location_in_garden.trim()}
+                      </p>
+                    ) : null}
                     <div className="space-y-1 text-[11px]">
                       <p
                         className={cn(
@@ -1779,6 +1785,11 @@ export default function LaveenGardenTracker() {
                       <p className="text-xs text-desert-sage mt-1">
                         Sun: {sunExposureLabel(plant.sun_exposure)}
                       </p>
+                      {plant.location_in_garden?.trim() ? (
+                        <p className="mt-0.5 text-xs text-desert-dust">
+                          {plant.location_in_garden.trim()}
+                        </p>
+                      ) : null}
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="text-sm text-desert-sage space-y-1">

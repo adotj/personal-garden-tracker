@@ -88,6 +88,7 @@ export function plantUpdateExtendedPatch(p: Plant) {
     fertilizer_frequency_days: p.fertilizer_frequency_days,
     fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
     fertilizer_notes: p.fertilizer_notes ?? null,
+    location_in_garden: p.location_in_garden?.trim() ? p.location_in_garden.trim() : null,
   };
 }
 
@@ -130,11 +131,13 @@ export function plantInsertExtendedPatch(input: {
   fertilizer_frequency_days: number;
   fertilizer_seasons: FertilizerSeason[] | null | undefined;
   fertilizer_notes: string;
+  location_in_garden?: string | null;
 }) {
   return {
     sun_exposure: normalizeSunExposure(input.sun_exposure),
     fertilizer_frequency_days: input.fertilizer_frequency_days,
     fertilizer_seasons: normalizeFertilizerSeasons(input.fertilizer_seasons),
     fertilizer_notes: input.fertilizer_notes.trim() || null,
+    location_in_garden: input.location_in_garden?.trim() ? input.location_in_garden.trim() : null,
   };
 }

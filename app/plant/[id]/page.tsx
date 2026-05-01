@@ -4,13 +4,16 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
-import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '@/lib/plant-types';
-import { sunExposureLabel } from '@/lib/plant-types';
+import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry, SunExposure } from '@/lib/plant-types';
+import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
 import {
   formatPlantCareInstant,
   isoOrDateToDateInputValue,
   isPlantCareDateToday,
   normalizePlantRow,
+  normalizeSunExposure,
+  plantUpdateCorePayload,
+  plantUpdateExtendedPatch,
   wateringLoggedAtIso,
 } from '@/lib/plant-helpers';
 import {
@@ -28,6 +31,7 @@ import { getGardenMode } from '@/lib/garden-session';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -50,6 +54,8 @@ import {
   Sun,
   CalendarClock,
   Sparkles,
+  Pencil,
+  MapPin,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { addDays } from 'date-fns';
@@ -94,6 +100,78 @@ function formatDueLine(iso: string | null, freqDays: number): string {
   return `Next due ~ ${format(due, 'MMM d, yyyy')}`;
 }
 
+type HeaderPotOption = {
+  id: string;
+  label: string;
+  container_type: string;
+  pot_size: string;
+};
+
+const HEADER_POT_OPTIONS: readonly HeaderPotOption[] = [
+  { id: 'pot-4', label: '4" Pot', container_type: 'Pot', pot_size: '4" Pot' },
+  { id: 'pot-6', label: '6" Pot', container_type: 'Pot', pot_size: '6" Pot' },
+  { id: 'pot-10', label: '10" Pot', container_type: 'Pot', pot_size: '10" Pot' },
+  { id: 'pot-14', label: '14" Pot', container_type: 'Pot', pot_size: '14" Pot' },
+  { id: 'pot-20', label: '20" Pot', container_type: 'Pot', pot_size: '20" Pot' },
+  { id: 'grow-bag', label: 'Grow Bag', container_type: 'Grow Bag', pot_size: '10 gallon' },
+  { id: 'raised-bed', label: 'Raised Bed', container_type: 'Raised Bed', pot_size: 'Raised Bed' },
+  { id: 'ground', label: 'Ground / In-Ground', container_type: 'Ground', pot_size: 'In-Ground' },
+  { id: 'other', label: 'Other', container_type: 'Other', pot_size: '' },
+];
+
+const HEADER_LOCATION_PRESETS = [
+  'Back Patio',
+  'Raised Bed #3',
+  'East Balcony',
+  'Front Yard',
+  'Greenhouse',
+  'South Window',
+] as const;
+
+const HEADER_LOCATION_NONE = '__none__';
+const HEADER_LOCATION_OTHER = '__other__';
+
+function matchHeaderPotOption(plant: Plant): { optionId: string; customDetail: string } {
+  const found = HEADER_POT_OPTIONS.find(
+    (o) => o.id !== 'other' && o.container_type === plant.container_type && o.pot_size === plant.pot_size,
+  );
+  if (found) return { optionId: found.id, customDetail: '' };
+  return {
+    optionId: 'other',
+    customDetail:
+      plant.container_type === 'Other'
+        ? plant.pot_size.trim()
+        : `${plant.container_type} • ${plant.pot_size}`.trim(),
+  };
+}
+
+function resolvePotFromHeaderSelection(
+  optionId: string,
+  customDetail: string,
+): { container_type: string; pot_size: string } {
+  const opt = HEADER_POT_OPTIONS.find((o) => o.id === optionId);
+  const trimmed = customDetail.trim();
+  if (opt && opt.id !== 'other') {
+    if (trimmed) {
+      return { container_type: opt.container_type, pot_size: trimmed };
+    }
+    return { container_type: opt.container_type, pot_size: opt.pot_size };
+  }
+  if (trimmed) {
+    return { container_type: 'Pot', pot_size: trimmed };
+  }
+  return { container_type: 'Other', pot_size: 'Custom' };
+}
+
+function matchLocationPreset(location: string | null | undefined): { preset: string; custom: string } {
+  const t = location?.trim() ?? '';
+  if (!t) return { preset: HEADER_LOCATION_NONE, custom: '' };
+  if ((HEADER_LOCATION_PRESETS as readonly string[]).includes(t)) {
+    return { preset: t, custom: '' };
+  }
+  return { preset: HEADER_LOCATION_OTHER, custom: t };
+}
+
 export default function PlantProfile() {
   const params = useParams();
   const router = useRouter();
@@ -130,6 +208,19 @@ export default function PlantProfile() {
   const [photoUploadBusy, setPhotoUploadBusy] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
   const [aiPromptOpen, setAiPromptOpen] = useState(false);
+  const [headerEditMode, setHeaderEditMode] = useState(false);
+  const [headerPotOptionId, setHeaderPotOptionId] = useState('pot-14');
+  const [headerPotCustom, setHeaderPotCustom] = useState('');
+  const [headerSun, setHeaderSun] = useState<SunExposure>('full_sun');
+  const [headerLocationPreset, setHeaderLocationPreset] = useState(HEADER_LOCATION_NONE);
+  const [headerLocationCustom, setHeaderLocationCustom] = useState('');
+  const [headerSaveBusy, setHeaderSaveBusy] = useState(false);
+  const headerBaselineRef = useRef<{
+    container_type: string;
+    pot_size: string;
+    sun_exposure: SunExposure;
+    location_in_garden: string | null | undefined;
+  } | null>(null);
   const timelineUploadInputRef = useRef<HTMLInputElement>(null);
   const timelineCameraInputRef = useRef<HTMLInputElement>(null);
   const slideshowTouchStartXRef = useRef<number | null>(null);
@@ -156,6 +247,211 @@ export default function PlantProfile() {
     setLoading(false);
     return normalized;
   }, [plantId, router]);
+
+  useEffect(() => {
+    if (!plant) return;
+    const potMatch = matchHeaderPotOption(plant);
+    setHeaderPotOptionId(potMatch.optionId);
+    setHeaderPotCustom(potMatch.customDetail);
+    setHeaderSun(normalizeSunExposure(plant.sun_exposure));
+    const loc = matchLocationPreset(plant.location_in_garden);
+    setHeaderLocationPreset(loc.preset);
+    setHeaderLocationCustom(loc.custom);
+    headerBaselineRef.current = {
+      container_type: plant.container_type,
+      pot_size: plant.pot_size,
+      sun_exposure: normalizeSunExposure(plant.sun_exposure),
+      location_in_garden: plant.location_in_garden ?? '',
+    };
+  }, [plant?.id]);
+
+  const resolveHeaderLocationValue = useCallback((preset: string, custom: string): string | null => {
+    const c = custom.trim();
+    if (preset === HEADER_LOCATION_NONE || preset === '') return null;
+    if (preset === HEADER_LOCATION_OTHER) return c || null;
+    return preset;
+  }, []);
+
+  const saveHeaderProfileFields = useCallback(
+    async (next: {
+      container_type: string;
+      pot_size: string;
+      sun_exposure: SunExposure;
+      location_in_garden: string | null;
+    }) => {
+      if (!plant || isWriteDisabled) return;
+      const base = headerBaselineRef.current;
+      const locNext = next.location_in_garden ?? '';
+      const locBase = (base?.location_in_garden ?? '').trim();
+      if (
+        base &&
+        base.container_type === next.container_type &&
+        base.pot_size === next.pot_size &&
+        base.sun_exposure === next.sun_exposure &&
+        locBase === locNext.trim()
+      ) {
+        return;
+      }
+      const merged: Plant = {
+        ...plant,
+        container_type: next.container_type,
+        pot_size: next.pot_size,
+        sun_exposure: next.sun_exposure,
+        location_in_garden: next.location_in_garden ?? undefined,
+      };
+      setPlant(merged);
+      setHeaderSaveBusy(true);
+      try {
+        const { error: coreError } = await supabase
+          .from('plants')
+          .update(plantUpdateCorePayload(merged))
+          .eq('id', plantId);
+        if (coreError) throw coreError;
+        const { error: extError } = await supabase
+          .from('plants')
+          .update(plantUpdateExtendedPatch(merged))
+          .eq('id', plantId);
+        if (extError) console.warn('plants extended update:', extError);
+        toast.success('Saved', { duration: 2000 });
+        headerBaselineRef.current = {
+          container_type: merged.container_type,
+          pot_size: merged.pot_size,
+          sun_exposure: normalizeSunExposure(merged.sun_exposure),
+          location_in_garden: merged.location_in_garden ?? '',
+        };
+        await fetchPlant();
+      } catch (e) {
+        console.error(e);
+        toast.error('Could not save');
+        await fetchPlant();
+      } finally {
+        setHeaderSaveBusy(false);
+      }
+    },
+    [plant, isWriteDisabled, plantId, fetchPlant],
+  );
+
+  const enterHeaderEditMode = useCallback(() => {
+    if (!plant || isWriteDisabled) return;
+    const potMatch = matchHeaderPotOption(plant);
+    setHeaderPotOptionId(potMatch.optionId);
+    setHeaderPotCustom(potMatch.customDetail);
+    setHeaderSun(normalizeSunExposure(plant.sun_exposure));
+    const loc = matchLocationPreset(plant.location_in_garden);
+    setHeaderLocationPreset(loc.preset);
+    setHeaderLocationCustom(loc.custom);
+    headerBaselineRef.current = {
+      container_type: plant.container_type,
+      pot_size: plant.pot_size,
+      sun_exposure: normalizeSunExposure(plant.sun_exposure),
+      location_in_garden: plant.location_in_garden ?? '',
+    };
+    setHeaderEditMode(true);
+  }, [plant, isWriteDisabled]);
+
+  const commitHeaderFromState = useCallback(() => {
+    const pot = resolvePotFromHeaderSelection(headerPotOptionId, headerPotCustom);
+    const locationVal = resolveHeaderLocationValue(headerLocationPreset, headerLocationCustom);
+    void saveHeaderProfileFields({
+      ...pot,
+      sun_exposure: headerSun,
+      location_in_garden: locationVal,
+    });
+  }, [
+    headerPotOptionId,
+    headerPotCustom,
+    headerSun,
+    headerLocationPreset,
+    headerLocationCustom,
+    resolveHeaderLocationValue,
+    saveHeaderProfileFields,
+  ]);
+
+  const onHeaderPotSelectChange = useCallback(
+    (value: string | null) => {
+      const v = value ?? headerPotOptionId;
+      setHeaderPotOptionId(v);
+      const pot = resolvePotFromHeaderSelection(v, headerPotCustom);
+      void saveHeaderProfileFields({
+        ...pot,
+        sun_exposure: headerSun,
+        location_in_garden: resolveHeaderLocationValue(headerLocationPreset, headerLocationCustom),
+      });
+    },
+    [
+      headerPotOptionId,
+      headerPotCustom,
+      headerSun,
+      headerLocationPreset,
+      headerLocationCustom,
+      resolveHeaderLocationValue,
+      saveHeaderProfileFields,
+    ],
+  );
+
+  const onHeaderSunChange = useCallback(
+    (value: string | null) => {
+      const sun = normalizeSunExposure(value ?? headerSun);
+      setHeaderSun(sun);
+      const pot = resolvePotFromHeaderSelection(headerPotOptionId, headerPotCustom);
+      void saveHeaderProfileFields({
+        ...pot,
+        sun_exposure: sun,
+        location_in_garden: resolveHeaderLocationValue(headerLocationPreset, headerLocationCustom),
+      });
+    },
+    [
+      headerPotOptionId,
+      headerPotCustom,
+      headerSun,
+      headerLocationPreset,
+      headerLocationCustom,
+      resolveHeaderLocationValue,
+      saveHeaderProfileFields,
+    ],
+  );
+
+  const onHeaderLocationPresetChange = useCallback(
+    (value: string | null) => {
+      const v = value ?? HEADER_LOCATION_NONE;
+      setHeaderLocationPreset(v);
+      if (v !== HEADER_LOCATION_OTHER) {
+        setHeaderLocationCustom('');
+      }
+      const pot = resolvePotFromHeaderSelection(headerPotOptionId, headerPotCustom);
+      const loc =
+        v === HEADER_LOCATION_NONE
+          ? null
+          : v === HEADER_LOCATION_OTHER
+            ? headerLocationCustom.trim() || null
+            : v;
+      void saveHeaderProfileFields({
+        ...pot,
+        sun_exposure: headerSun,
+        location_in_garden: loc,
+      });
+    },
+    [
+      headerPotOptionId,
+      headerPotCustom,
+      headerSun,
+      headerLocationCustom,
+      saveHeaderProfileFields,
+    ],
+  );
+
+  const onHeaderKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter') return;
+    const t = e.target as HTMLElement;
+    if (t.tagName === 'BUTTON' || t.getAttribute('role') === 'combobox') return;
+    e.preventDefault();
+    commitHeaderFromState();
+  };
+
+  const exitHeaderEditMode = useCallback(() => {
+    commitHeaderFromState();
+    setHeaderEditMode(false);
+  }, [commitHeaderFromState]);
 
   const fetchPhotos = useCallback(async () => {
     const { data } = await supabase
@@ -673,27 +969,215 @@ export default function PlantProfile() {
             </Button>
             <div className="min-w-0 flex-1">
               <h1 className="text-3xl font-bold text-oasis">{plant.name}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <Badge>
-                  {plant.container_type} • {plant.pot_size}
-                </Badge>
-                <Badge variant="secondary" className="gap-1 font-normal">
-                  <Sun className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  {sunExposureLabel(plant.sun_exposure)}
-                </Badge>
-              </div>
+              {!headerEditMode || isWriteDisabled ? (
+                <div
+                  className="mt-1 flex flex-wrap items-center gap-2"
+                  onKeyDown={onHeaderKeyDown}
+                  role={isWriteDisabled ? undefined : 'group'}
+                  aria-label="Plant placement summary"
+                >
+                  <button
+                    type="button"
+                    disabled={isWriteDisabled}
+                    onClick={enterHeaderEditMode}
+                    className={cn(
+                      'inline-flex max-w-full items-center rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium transition-colors',
+                      'bg-primary text-primary-foreground',
+                      !isWriteDisabled &&
+                        'cursor-pointer hover:bg-primary/90 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                      isWriteDisabled && 'cursor-default opacity-90',
+                    )}
+                  >
+                    <span className="truncate">
+                      {plant.container_type} • {plant.pot_size}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isWriteDisabled}
+                    onClick={enterHeaderEditMode}
+                    className={cn(
+                      'inline-flex max-w-full items-center gap-1 rounded-4xl border border-transparent px-2 py-0.5 text-xs font-normal transition-colors',
+                      'bg-secondary text-secondary-foreground',
+                      !isWriteDisabled &&
+                        'cursor-pointer hover:bg-secondary/90 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                      isWriteDisabled && 'cursor-default opacity-90',
+                    )}
+                  >
+                    <Sun className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{sunExposureLabel(plant.sun_exposure)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isWriteDisabled}
+                    onClick={enterHeaderEditMode}
+                    className={cn(
+                      'inline-flex max-w-full items-center gap-1 rounded-4xl border border-transparent px-2 py-0.5 text-xs font-normal transition-colors',
+                      plant.location_in_garden?.trim()
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'border-border text-muted-foreground bg-muted/40',
+                      !isWriteDisabled &&
+                        'cursor-pointer hover:bg-muted focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                      isWriteDisabled && 'cursor-default opacity-90',
+                    )}
+                  >
+                    <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">
+                      {plant.location_in_garden?.trim() ? plant.location_in_garden.trim() : 'Location'}
+                    </span>
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="mt-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
+                  onKeyDown={onHeaderKeyDown}
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-[min(100%,280px)]">
+                    <Label htmlFor="profile-header-pot" className="text-xs text-desert-dust">
+                      Pot / container
+                    </Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select value={headerPotOptionId} onValueChange={onHeaderPotSelectChange}>
+                        <SelectTrigger
+                          id="profile-header-pot"
+                          size="sm"
+                          className="min-h-8 w-full min-w-[160px] border-desert-border bg-desert-parchment data-[size=sm]:h-8 sm:w-auto"
+                          aria-busy={headerSaveBusy}
+                        >
+                          <SelectValue placeholder="Choose container" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HEADER_POT_OPTIONS.map((o) => (
+                            <SelectItem key={o.id} value={o.id}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        aria-label="Custom pot or size detail"
+                        placeholder="Custom detail"
+                        value={headerPotCustom}
+                        onChange={(e) => setHeaderPotCustom(e.target.value)}
+                        onBlur={() => {
+                          const pot = resolvePotFromHeaderSelection(headerPotOptionId, headerPotCustom);
+                          void saveHeaderProfileFields({
+                            ...pot,
+                            sun_exposure: headerSun,
+                            location_in_garden: resolveHeaderLocationValue(
+                              headerLocationPreset,
+                              headerLocationCustom,
+                            ),
+                          });
+                        }}
+                        className="h-8 min-w-[120px] flex-1 border-desert-border bg-desert-parchment text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-[min(100%,220px)]">
+                    <Label htmlFor="profile-header-sun" className="text-xs text-desert-dust">
+                      Sun
+                    </Label>
+                    <Select value={headerSun} onValueChange={onHeaderSunChange}>
+                      <SelectTrigger
+                        id="profile-header-sun"
+                        size="sm"
+                        className="min-h-8 w-full border-desert-border bg-desert-parchment data-[size=sm]:h-8"
+                        aria-busy={headerSaveBusy}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUN_EXPOSURE_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value} title={o.hint}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-[min(100%,280px)]">
+                    <Label htmlFor="profile-header-location" className="text-xs text-desert-dust">
+                      Location
+                    </Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select value={headerLocationPreset} onValueChange={onHeaderLocationPresetChange}>
+                        <SelectTrigger
+                          id="profile-header-location"
+                          size="sm"
+                          className="min-h-8 w-full min-w-[140px] flex-1 border-desert-border bg-desert-parchment data-[size=sm]:h-8 sm:w-auto"
+                          aria-busy={headerSaveBusy}
+                        >
+                          <SelectValue placeholder="Where it sits" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={HEADER_LOCATION_NONE}>— None —</SelectItem>
+                          {HEADER_LOCATION_PRESETS.map((p) => (
+                            <SelectItem key={p} value={p}>
+                              {p}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={HEADER_LOCATION_OTHER}>Other…</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {headerLocationPreset === HEADER_LOCATION_OTHER ? (
+                        <Input
+                          aria-label="Custom location"
+                          placeholder="Describe spot"
+                          value={headerLocationCustom}
+                          onChange={(e) => setHeaderLocationCustom(e.target.value)}
+                          onBlur={() => {
+                            const pot = resolvePotFromHeaderSelection(headerPotOptionId, headerPotCustom);
+                            void saveHeaderProfileFields({
+                              ...pot,
+                              sun_exposure: headerSun,
+                              location_in_garden: resolveHeaderLocationValue(
+                                HEADER_LOCATION_OTHER,
+                                headerLocationCustom,
+                              ),
+                            });
+                          }}
+                          className="h-8 min-w-[120px] flex-1 border-desert-border bg-desert-parchment text-sm"
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 self-start rounded-full border-desert-border"
-            onClick={() => setAiPromptOpen(true)}
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            AI prompt
-          </Button>
+          <div className="flex shrink-0 flex-row items-start gap-2 self-start">
+            {!isWriteDisabled ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={cn(
+                  'rounded-full border-desert-border',
+                  headerEditMode && 'border-oasis bg-oasis/10 text-oasis',
+                )}
+                onClick={() => (headerEditMode ? exitHeaderEditMode() : enterHeaderEditMode())}
+                aria-label={headerEditMode ? 'Done editing placement' : 'Edit pot, sun, and location'}
+                aria-pressed={headerEditMode}
+              >
+                {headerSaveBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Pencil className="h-4 w-4" aria-hidden />
+                )}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 rounded-full border-desert-border"
+              onClick={() => setAiPromptOpen(true)}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              AI prompt
+            </Button>
+          </div>
         </div>
       </header>
 
