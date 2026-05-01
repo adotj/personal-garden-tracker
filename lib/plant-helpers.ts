@@ -68,19 +68,33 @@ export function normalizePlantRow(row: Plant): Plant {
  * Does not include `species` / `location_in_garden` until you run
  * `20260415120000_plants_species_location.sql` and add those keys here.
  */
-export function plantUpdatePayload(p: Plant) {
+/** Columns that exist on older schemas and are safe to update first. */
+export function plantUpdateCorePayload(p: Plant) {
   return {
     name: p.name,
     container_type: p.container_type,
     pot_size: p.pot_size,
-    sun_exposure: normalizeSunExposure(p.sun_exposure),
     watering_frequency_days: p.watering_frequency_days,
     last_watered: p.last_watered?.trim() || null,
-    fertilizer_frequency_days: p.fertilizer_frequency_days,
     last_fertilized: p.last_fertilized?.trim() || null,
+    photo_url: p.photo_url ?? null,
+  };
+}
+
+/** Columns added by newer migrations; apply as best-effort patch after core update. */
+export function plantUpdateExtendedPatch(p: Plant) {
+  return {
+    sun_exposure: normalizeSunExposure(p.sun_exposure),
+    fertilizer_frequency_days: p.fertilizer_frequency_days,
     fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
     fertilizer_notes: p.fertilizer_notes ?? null,
-    photo_url: p.photo_url ?? null,
+  };
+}
+
+export function plantUpdatePayload(p: Plant) {
+  return {
+    ...plantUpdateCorePayload(p),
+    ...plantUpdateExtendedPatch(p),
   };
 }
 

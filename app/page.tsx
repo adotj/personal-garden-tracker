@@ -13,7 +13,8 @@ import {
   normalizePlantRow,
   plantInsertCorePayload,
   plantInsertExtendedPatch,
-  plantUpdatePayload,
+  plantUpdateCorePayload,
+  plantUpdateExtendedPatch,
   normalizeSunExposure,
   wateringLoggedAtIso,
 } from '@/lib/plant-helpers';
@@ -684,9 +685,22 @@ export default function LaveenGardenTracker() {
       Number.isFinite(fParsed) && fParsed >= 1 ? fParsed : editingPlant.fertilizer_frequency_days,
     );
     const merged: Plant = { ...editingPlant, watering_frequency_days: wf, fertilizer_frequency_days: ff };
-    const { error } = await supabase.from('plants').update(plantUpdatePayload(merged)).eq('id', editingPlant.id);
-    if (error) toast.error(error.message || 'Failed to update plant');
-    else {
+    const { error: coreError } = await supabase
+      .from('plants')
+      .update(plantUpdateCorePayload(merged))
+      .eq('id', editingPlant.id);
+    if (coreError) {
+      toast.error(coreError.message || 'Failed to update plant');
+      return;
+    }
+    const { error: extError } = await supabase
+      .from('plants')
+      .update(plantUpdateExtendedPatch(merged))
+      .eq('id', editingPlant.id);
+    if (extError) {
+      console.warn('plants extended columns update (add supabase/migrations if missing):', extError);
+    }
+    {
       if (
         merged.photo_url &&
         merged.photo_url !== baseline

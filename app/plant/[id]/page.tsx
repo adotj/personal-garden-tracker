@@ -8,6 +8,7 @@ import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '
 import { sunExposureLabel } from '@/lib/plant-types';
 import {
   formatPlantCareInstant,
+  isoOrDateToDateInputValue,
   isPlantCareDateToday,
   normalizePlantRow,
   wateringLoggedAtIso,
@@ -115,6 +116,11 @@ export default function PlantProfile() {
     notes: '',
   });
   const [fertSettingsBusy, setFertSettingsBusy] = useState(false);
+  const [wateringDraft, setWateringDraft] = useState<{ frequencyDays: string; lastWatered: string }>({
+    frequencyDays: '',
+    lastWatered: '',
+  });
+  const [wateringSettingsBusy, setWateringSettingsBusy] = useState(false);
   const [plantNoteEntries, setPlantNoteEntries] = useState<PlantNoteEntry[]>([]);
   const [newNoteText, setNewNoteText] = useState('');
   const [noteAddBusy, setNoteAddBusy] = useState(false);
@@ -370,11 +376,42 @@ export default function PlantProfile() {
 
   useEffect(() => {
     if (!plant) return;
+    setWateringDraft({
+      frequencyDays: String(plant.watering_frequency_days),
+      lastWatered: isoOrDateToDateInputValue(plant.last_watered),
+    });
     setFertDraft({
       seasons: normalizeFertilizerSeasons(plant.fertilizer_seasons),
       notes: plant.fertilizer_notes ?? '',
     });
   }, [plant?.id]);
+
+  const saveWateringSettings = async () => {
+    if (!plant || isWriteDisabled) return;
+    const parsedDays = parseInt(wateringDraft.frequencyDays, 10);
+    if (!Number.isFinite(parsedDays) || parsedDays < 1) {
+      toast.error('Watering frequency must be at least 1 day');
+      return;
+    }
+    setWateringSettingsBusy(true);
+    try {
+      const { error } = await supabase
+        .from('plants')
+        .update({
+          watering_frequency_days: parsedDays,
+          last_watered: wateringDraft.lastWatered.trim() || null,
+        })
+        .eq('id', plantId);
+      if (error) throw error;
+      toast.success('Watering schedule saved');
+      await fetchPlant();
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not save watering settings');
+    } finally {
+      setWateringSettingsBusy(false);
+    }
+  };
 
   const togglePhotoSelected = (id: string) => {
     setSelectedPhotoIds((prev) => {
@@ -619,6 +656,9 @@ export default function PlantProfile() {
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
+  const wateringDraftMatchesPlant =
+    wateringDraft.frequencyDays.trim() === String(plant.watering_frequency_days) &&
+    wateringDraft.lastWatered === isoOrDateToDateInputValue(plant.last_watered);
   const slideshowPhoto = slideshowIndex !== null ? photos[slideshowIndex] : null;
 
   return (
@@ -1018,6 +1058,54 @@ export default function PlantProfile() {
               {isWriteDisabled ? (
                 <p className="w-full text-xs text-amber-700 dark:text-amber-400">Demo mode — care actions are disabled.</p>
               ) : null}
+            </div>
+            <div className="space-y-3 rounded-2xl border border-desert-mist/70 bg-white/60 p-4 dark:border-zinc-600 dark:bg-zinc-800/80">
+              <p className="text-sm font-medium text-desert-ink dark:text-zinc-100">Adjust watering schedule</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="profile-water-frequency">Water every (days)</Label>
+                  <Input
+                    id="profile-water-frequency"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={wateringDraft.frequencyDays}
+                    onChange={(e) =>
+                      setWateringDraft((draft) => ({
+                        ...draft,
+                        frequencyDays: e.target.value,
+                      }))
+                    }
+                    disabled={isWriteDisabled}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="profile-last-watered">Last watered date</Label>
+                  <Input
+                    id="profile-last-watered"
+                    type="date"
+                    value={wateringDraft.lastWatered}
+                    onChange={(e) =>
+                      setWateringDraft((draft) => ({
+                        ...draft,
+                        lastWatered: e.target.value,
+                      }))
+                    }
+                    disabled={isWriteDisabled}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                className="rounded-full bg-oasis hover:bg-oasis-hover"
+                disabled={isWriteDisabled || wateringSettingsBusy || wateringDraftMatchesPlant}
+                onClick={() => void saveWateringSettings()}
+              >
+                {wateringSettingsBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save watering settings
+              </Button>
             </div>
           </CardContent>
         </Card>
