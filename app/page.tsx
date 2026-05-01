@@ -106,6 +106,8 @@ function activityPrimaryLine(log: Activity): string {
   const name = log.plant_name?.trim();
   const quoted = name ? `“${name}”` : null;
   switch (log.action) {
+    case 'Rainy Day':
+      return 'Rainy day — watered every plant';
     case 'Plant Watered':
       return quoted ? `Watered ${quoted}` : 'Plant watered';
     case 'Plant Fertilized':
@@ -672,6 +674,39 @@ export default function LaveenGardenTracker() {
     fetchActivities();
   };
 
+  const markAllWateredToday = async () => {
+    if (isWriteDisabled) return;
+    if (plants.length === 0) {
+      toast.info('No plants to update yet.');
+      return;
+    }
+    const alreadyWateredToday = plants.filter((plant) => isPlantCareDateToday(plant.last_watered)).length;
+    if (alreadyWateredToday === plants.length) {
+      toast.info('All plants are already marked watered today.');
+      return;
+    }
+
+    const when = wateringLoggedAtIso();
+    const { error } = await supabase.from('plants').update({ last_watered: when });
+    if (error) {
+      const parts = [error.message, error.details, error.hint].filter(
+        (s): s is string => typeof s === 'string' && s.trim().length > 0,
+      );
+      toast.error(parts.length > 0 ? parts.join(' — ') : 'Could not apply rainy day watering');
+      return;
+    }
+
+    setPlants((prev) => prev.map((plant) => ({ ...plant, last_watered: when })));
+    const whenLabel = formatPlantCareInstant(when, 'profile');
+    await logActivity(
+      'Rainy Day',
+      undefined,
+      `Set last watered to ${whenLabel} for all ${plants.length} plants.`,
+    );
+    toast.success(`🌧️ Rainy day applied — ${plants.length} plants marked watered today.`);
+    await fetchActivities();
+  };
+
   const markFertilized = async (id: string, name: string) => {
     if (isWriteDisabled) return;
     const plant = plants.find((p) => p.id === id);
@@ -1075,6 +1110,17 @@ export default function LaveenGardenTracker() {
             </div>
 
             <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 shrink-0 rounded-full px-3 text-xs sm:text-sm"
+                onClick={markAllWateredToday}
+                disabled={isDemoMode || plants.length === 0}
+              >
+                <Droplet className="mr-1.5 h-4 w-4" />
+                Rainy Day
+              </Button>
               <Button
                 type="button"
                 variant={fertDueThisMonthOnly ? 'default' : 'outline'}
