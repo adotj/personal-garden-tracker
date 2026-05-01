@@ -8,6 +8,7 @@ import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
 import {
   formatPlantCareInstant,
+  isPlantCareDateToday,
   isoOrDateToDateInputValue,
   normalizePlantRow,
   plantInsertCorePayload,
@@ -650,6 +651,11 @@ export default function LaveenGardenTracker() {
 
   const markWatered = async (id: string, name: string) => {
     if (isWriteDisabled) return;
+    const plant = plants.find((p) => p.id === id);
+    if (isPlantCareDateToday(plant?.last_watered)) {
+      toast.info(`${name} is already marked as watered today.`);
+      return;
+    }
     const when = wateringLoggedAtIso();
     const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', id);
     if (error) {
@@ -1384,7 +1390,7 @@ export default function LaveenGardenTracker() {
                             <Button
                               size="sm"
                               onClick={() => markWatered(plant.id, plant.name)}
-                              disabled={isDemoMode}
+                              disabled={isDemoMode || isPlantCareDateToday(plant.last_watered)}
                               className="rounded-full bg-oasis text-white hover:bg-oasis-hover"
                             >
                               <Droplet className="mr-1 h-4 w-4" /> Watered
@@ -1490,7 +1496,7 @@ export default function LaveenGardenTracker() {
                       <Button
                         size="sm"
                         onClick={() => markWatered(plant.id, plant.name)}
-                        disabled={isDemoMode}
+                        disabled={isDemoMode || isPlantCareDateToday(plant.last_watered)}
                         className="h-7 flex-1 rounded-full px-2 text-xs bg-oasis text-white hover:bg-oasis-hover"
                       >
                         <Droplet className="mr-1 h-3.5 w-3.5" />
@@ -1594,7 +1600,7 @@ export default function LaveenGardenTracker() {
                       </div>
 
                       <div className="flex gap-2 pointer-events-auto">
-                        <Button onClick={() => markWatered(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-oasis hover:bg-oasis-hover text-white rounded-full">
+                        <Button onClick={() => markWatered(plant.id, plant.name)} disabled={isDemoMode || isPlantCareDateToday(plant.last_watered)} className="flex-1 bg-oasis hover:bg-oasis-hover text-white rounded-full">
                           <Droplet className="mr-2 h-4 w-4" /> Watered Today
                         </Button>
                         <Button onClick={() => markFertilized(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full">

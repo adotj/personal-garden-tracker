@@ -6,7 +6,12 @@ import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry } from '@/lib/plant-types';
 import { sunExposureLabel } from '@/lib/plant-types';
-import { formatPlantCareInstant, normalizePlantRow, wateringLoggedAtIso } from '@/lib/plant-helpers';
+import {
+  formatPlantCareInstant,
+  isPlantCareDateToday,
+  normalizePlantRow,
+  wateringLoggedAtIso,
+} from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
   fertilizerUrgency,
@@ -205,6 +210,10 @@ export default function PlantProfile() {
 
   const markWateredFromProfile = async () => {
     if (!plant || isWriteDisabled) return;
+    if (isPlantCareDateToday(plant.last_watered)) {
+      toast.info(`${plant.name} is already marked as watered today.`);
+      return;
+    }
     setCareBusy('water');
     try {
       const when = wateringLoggedAtIso();
@@ -601,6 +610,7 @@ export default function PlantProfile() {
 
   const fertU = fertilizerUrgency(plant);
   const plantSeasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
+  const wateredToday = isPlantCareDateToday(plant.last_watered);
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
@@ -977,7 +987,7 @@ export default function PlantProfile() {
               <Button
                 type="button"
                 className="rounded-full bg-oasis hover:bg-oasis-hover"
-                disabled={isWriteDisabled || careBusy !== null}
+                disabled={isWriteDisabled || careBusy !== null || wateredToday}
                 onClick={() => void markWateredFromProfile()}
               >
                 {careBusy === 'water' ? (

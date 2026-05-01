@@ -1,4 +1,4 @@
-import { format, isValid, parseISO } from 'date-fns';
+import { format, isSameDay, isValid, parseISO } from 'date-fns';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
 
@@ -25,6 +25,14 @@ export function formatPlantCareInstant(iso: string | null, variant: 'card' | 'pr
     return variant === 'card' ? format(d, 'MMM d') : format(d, 'MMMM d, yyyy');
   }
   return variant === 'card' ? format(d, 'MMM d, h:mm a') : format(d, 'MMMM d, yyyy • h:mm a');
+}
+
+/** True when a stored care date/timestamp falls on the user's local current day. */
+export function isPlantCareDateToday(iso: string | null | undefined): boolean {
+  if (!iso?.trim()) return false;
+  const parsed = parseISO(iso.trim());
+  if (!isValid(parsed)) return false;
+  return isSameDay(parsed, new Date());
 }
 
 /** `type="date"` input value from a stored date or ISO timestamp. */
