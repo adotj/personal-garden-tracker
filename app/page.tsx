@@ -171,6 +171,7 @@ export default function LaveenGardenTracker() {
   const [isGardenHeaderCollapsed, setIsGardenHeaderCollapsed] = useState(false);
   const [plantViewMode, setPlantViewMode] = useState<PlantViewMode>('list');
   const editPhotoBaselineRef = useRef<string | null>(null);
+  const lastScrollYRef = useRef(0);
 
   const [newPlant, setNewPlant] = useState<NewPlantForm>({
     name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
@@ -362,13 +363,18 @@ export default function LaveenGardenTracker() {
     const expandAt = 24;
     const onScroll = () => {
       const y = window.scrollY || 0;
+      const previousY = lastScrollYRef.current;
+      const isScrollingUp = y < previousY;
+      lastScrollYRef.current = y;
       setIsGardenHeaderCollapsed((prev) => {
-        if (!prev && y > collapseAt) return true;
+        if (isScrollingUp) return false;
         if (prev && y < expandAt) return false;
+        if (!prev && y > collapseAt) return true;
         return prev;
       });
     };
 
+    lastScrollYRef.current = window.scrollY || 0;
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
