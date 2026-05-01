@@ -16,7 +16,7 @@ type Props = {
 };
 
 export function WateringCalendar({ plants, numDays = 14 }: Props) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const rows = useMemo(() => buildWateringCalendar(plants, numDays), [plants, numDays]);
   const today = useMemo(() => new Date(), []);
 

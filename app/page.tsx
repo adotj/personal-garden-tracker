@@ -167,7 +167,7 @@ export default function LaveenGardenTracker() {
   const [isUploading, setIsUploading] = useState(false);
   const [plantSearch, setPlantSearch] = useState('');
   const [fertDueThisMonthOnly, setFertDueThisMonthOnly] = useState(false);
-  const [isFertilizerOpen, setIsFertilizerOpen] = useState(true);
+  const [isFertilizerOpen, setIsFertilizerOpen] = useState(false);
   const [isGardenHeaderCollapsed, setIsGardenHeaderCollapsed] = useState(false);
   const [plantViewMode, setPlantViewMode] = useState<PlantViewMode>('list');
   const editPhotoBaselineRef = useRef<string | null>(null);
