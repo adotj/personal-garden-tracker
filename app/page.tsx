@@ -76,6 +76,8 @@ type NewPlantForm = {
 };
 
 type PlantViewMode = 'list' | 'table' | 'grid';
+type TableSortKey = 'name' | 'container' | 'watering' | 'fertilizer';
+type TableSortDirection = 'asc' | 'desc';
 
 function safeFormatDay(iso: string | null): string {
   if (!iso) return 'Never';
@@ -170,6 +172,8 @@ export default function LaveenGardenTracker() {
   const [isUploading, setIsUploading] = useState(false);
   const [plantSearch, setPlantSearch] = useState('');
   const [fertDueThisMonthOnly, setFertDueThisMonthOnly] = useState(false);
+  const [tableSortKey, setTableSortKey] = useState<TableSortKey>('name');
+  const [tableSortDirection, setTableSortDirection] = useState<TableSortDirection>('asc');
   const [isFertilizerOpen, setIsFertilizerOpen] = useState(false);
   const [isGardenHeaderCollapsed, setIsGardenHeaderCollapsed] = useState(false);
   const [plantViewMode, setPlantViewMode] = useState<PlantViewMode>('list');
@@ -408,6 +412,69 @@ export default function LaveenGardenTracker() {
   }, [plants, plantSearchNorm, fertDueThisMonthOnly]);
 
   const totalPlantCount = plants.length;
+
+  const sortedTablePlants = useMemo(() => {
+    const compareBy = (a: Plant, b: Plant): number => {
+      switch (tableSortKey) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'container': {
+          const aContainer = `${a.container_type} ${a.pot_size}`;
+          const bContainer = `${b.container_type} ${b.pot_size}`;
+          return aContainer.localeCompare(bContainer);
+        }
+        case 'watering': {
+          const waterDueTime = (plant: Plant) => {
+            if (!plant.last_watered) return Number.NEGATIVE_INFINITY;
+            const lastWatered = new Date(plant.last_watered);
+            const due = addDays(lastWatered, plant.watering_frequency_days || 7);
+            return isValid(due) ? due.getTime() : Number.NEGATIVE_INFINITY;
+          };
+          return waterDueTime(a) - waterDueTime(b);
+        }
+        case 'fertilizer': {
+          const fertilizerDueTime = (plant: Plant) =>
+            computeNextFertilizationDue(plant)?.getTime() ?? Number.POSITIVE_INFINITY;
+          return fertilizerDueTime(a) - fertilizerDueTime(b);
+        }
+        default:
+          return 0;
+      }
+    };
+
+    const directionMultiplier = tableSortDirection === 'asc' ? 1 : -1;
+    return [...filteredPlants].sort((a, b) => {
+      const primary = compareBy(a, b);
+      if (primary !== 0) return primary * directionMultiplier;
+      return a.name.localeCompare(b.name) * directionMultiplier;
+    });
+  }, [filteredPlants, tableSortDirection, tableSortKey]);
+
+  const toggleTableSort = (key: TableSortKey) => {
+    if (tableSortKey === key) {
+      setTableSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setTableSortKey(key);
+    setTableSortDirection('asc');
+  };
+
+  const tableSortIconClass = (key: TableSortKey) =>
+    cn(
+      'h-3.5 w-3.5 transition-transform',
+      tableSortKey === key
+        ? tableSortDirection === 'asc'
+          ? 'rotate-180 text-desert-ink'
+          : 'text-desert-ink'
+        : 'text-desert-dust/70',
+    );
+
+  const tableSortAriaLabel = (key: TableSortKey, label: string) => {
+    if (tableSortKey === key) {
+      return `Sort by ${label} (currently ${tableSortDirection === 'asc' ? 'ascending' : 'descending'})`;
+    }
+    return `Sort by ${label} (activate to sort ascending)`;
+  };
 
   const fertilizerUpcoming = useMemo(() => {
     const now = new Date();
@@ -1381,15 +1448,91 @@ export default function LaveenGardenTracker() {
               <table className="min-w-full text-sm">
                 <thead className="bg-desert-dune/60 text-left text-desert-sage">
                   <tr>
-                    <th className="px-4 py-3 font-semibold">Plant</th>
-                    <th className="px-4 py-3 font-semibold">Container</th>
-                    <th className="px-4 py-3 font-semibold">Watering</th>
-                    <th className="px-4 py-3 font-semibold">Fertilizer</th>
+                    <th
+                      className="px-4 py-3 font-semibold"
+                      aria-sort={
+                        tableSortKey === 'name'
+                          ? tableSortDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-left text-sm font-semibold hover:text-desert-ink"
+                        onClick={() => toggleTableSort('name')}
+                        aria-label={tableSortAriaLabel('name', 'plant name')}
+                      >
+                        Plant
+                        <ChevronDown className={tableSortIconClass('name')} aria-hidden />
+                      </button>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold"
+                      aria-sort={
+                        tableSortKey === 'container'
+                          ? tableSortDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-left text-sm font-semibold hover:text-desert-ink"
+                        onClick={() => toggleTableSort('container')}
+                        aria-label={tableSortAriaLabel('container', 'container')}
+                      >
+                        Container
+                        <ChevronDown className={tableSortIconClass('container')} aria-hidden />
+                      </button>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold"
+                      aria-sort={
+                        tableSortKey === 'watering'
+                          ? tableSortDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-left text-sm font-semibold hover:text-desert-ink"
+                        onClick={() => toggleTableSort('watering')}
+                        aria-label={tableSortAriaLabel('watering', 'watering schedule')}
+                      >
+                        Watering
+                        <ChevronDown className={tableSortIconClass('watering')} aria-hidden />
+                      </button>
+                    </th>
+                    <th
+                      className="px-4 py-3 font-semibold"
+                      aria-sort={
+                        tableSortKey === 'fertilizer'
+                          ? tableSortDirection === 'asc'
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-left text-sm font-semibold hover:text-desert-ink"
+                        onClick={() => toggleTableSort('fertilizer')}
+                        aria-label={tableSortAriaLabel('fertilizer', 'fertilizer schedule')}
+                      >
+                        Fertilizer
+                        <ChevronDown className={tableSortIconClass('fertilizer')} aria-hidden />
+                      </button>
+                    </th>
                     <th className="px-4 py-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPlants.map((plant) => {
+                  {sortedTablePlants.map((plant) => {
                     const showWaterDue = waterDueSoon(plant);
                     const fertU = fertilizerUrgency(plant);
                     const showFertStress = fertilizerDueSoonOrOverdue(plant);
