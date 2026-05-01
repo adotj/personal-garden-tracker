@@ -12,8 +12,7 @@ import {
   isPlantCareDateToday,
   normalizePlantRow,
   normalizeSunExposure,
-  plantUpdateCorePayload,
-  plantUpdateExtendedPatch,
+  plantUpdatePayload,
   wateringLoggedAtIso,
 } from '@/lib/plant-helpers';
 import {
@@ -151,16 +150,25 @@ function resolvePotFromHeaderSelection(
 ): { container_type: string; pot_size: string } {
   const opt = HEADER_POT_OPTIONS.find((o) => o.id === optionId);
   const trimmed = customDetail.trim();
+  // Preset rows ignore custom text so switching away from “Other” cannot save stale text as pot_size.
   if (opt && opt.id !== 'other') {
-    if (trimmed) {
-      return { container_type: opt.container_type, pot_size: trimmed };
-    }
     return { container_type: opt.container_type, pot_size: opt.pot_size };
   }
   if (trimmed) {
     return { container_type: 'Pot', pot_size: trimmed };
   }
   return { container_type: 'Other', pot_size: 'Custom' };
+}
+
+/** Uses custom detail only when “Other” is selected — avoids stale React state after preset changes. */
+function resolvePotWhenChangingPreset(optionId: string, headerPotCustom: string): {
+  container_type: string;
+  pot_size: string;
+} {
+  if (optionId === 'other') {
+    return resolvePotFromHeaderSelection('other', headerPotCustom);
+  }
+  return resolvePotFromHeaderSelection(optionId, '');
 }
 
 function matchLocationPreset(location: string | null | undefined): { preset: string; custom: string } {
@@ -178,6 +186,8 @@ export default function PlantProfile() {
   const plantId = params.id as string;
 
   const [plant, setPlant] = useState<Plant | null>(null);
+  /** Avoid stale closures when saving header fields after rapid dropdown changes. */
+  const plantRef = useRef<Plant | null>(null);
   const [photos, setPhotos] = useState<PlantPhotoRow[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,6 +240,10 @@ export default function PlantProfile() {
     setIsWriteDisabled(getGardenMode() === 'demo');
   }, []);
 
+  useEffect(() => {
+    plantRef.current = plant;
+  }, [plant]);
+
   const fetchPlant = useCallback(async () => {
     const { data, error } = await supabase
       .from('plants')
@@ -279,7 +293,8 @@ export default function PlantProfile() {
       sun_exposure: SunExposure;
       location_in_garden: string | null;
     }) => {
-      if (!plant || isWriteDisabled) return;
+      const basePlant = plantRef.current;
+      if (!basePlant || isWriteDisabled) return;
       const base = headerBaselineRef.current;
       const locNext = next.location_in_garden ?? '';
       const locBase = (base?.location_in_garden ?? '').trim();
@@ -293,25 +308,21 @@ export default function PlantProfile() {
         return;
       }
       const merged: Plant = {
-        ...plant,
+        ...basePlant,
         container_type: next.container_type,
         pot_size: next.pot_size,
         sun_exposure: next.sun_exposure,
         location_in_garden: next.location_in_garden ?? undefined,
       };
+      plantRef.current = merged;
       setPlant(merged);
       setHeaderSaveBusy(true);
       try {
-        const { error: coreError } = await supabase
+        const { error } = await supabase
           .from('plants')
-          .update(plantUpdateCorePayload(merged))
+          .update(plantUpdatePayload(merged))
           .eq('id', plantId);
-        if (coreError) throw coreError;
-        const { error: extError } = await supabase
-          .from('plants')
-          .update(plantUpdateExtendedPatch(merged))
-          .eq('id', plantId);
-        if (extError) console.warn('plants extended update:', extError);
+        if (error) throw error;
         toast.success('Saved', { duration: 2000 });
         headerBaselineRef.current = {
           container_type: merged.container_type,
@@ -328,7 +339,7 @@ export default function PlantProfile() {
         setHeaderSaveBusy(false);
       }
     },
-    [plant, isWriteDisabled, plantId, fetchPlant],
+    [isWriteDisabled, plantId, fetchPlant],
   );
 
   const enterHeaderEditMode = useCallback(() => {
@@ -371,7 +382,10 @@ export default function PlantProfile() {
     (value: string | null) => {
       const v = value ?? headerPotOptionId;
       setHeaderPotOptionId(v);
-      const pot = resolvePotFromHeaderSelection(v, headerPotCustom);
+      if (v !== 'other') {
+        setHeaderPotCustom('');
+      }
+      const pot = resolvePotWhenChangingPreset(v, headerPotCustom);
       void saveHeaderProfileFields({
         ...pot,
         sun_exposure: headerSun,
