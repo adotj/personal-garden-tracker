@@ -408,6 +408,10 @@ export default function LaveenGardenTracker() {
   }, [plants, plantSearchNorm, fertDueThisMonthOnly]);
 
   const totalPlantCount = plants.length;
+  const showRainyDayButton = useMemo(() => {
+    if (!weather?.forecast?.length) return false;
+    return weather.forecast.some((day: { condition?: string }) => day.condition === 'Rain');
+  }, [weather]);
 
   const fertilizerUpcoming = useMemo(() => {
     const now = new Date();
@@ -1112,17 +1116,6 @@ export default function LaveenGardenTracker() {
             <div className="flex w-full min-w-0 flex-col gap-2 sm:max-w-2xl sm:flex-row sm:items-center">
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="h-10 shrink-0 rounded-full px-3 text-xs sm:text-sm"
-                onClick={markAllWateredToday}
-                disabled={isDemoMode || plants.length === 0}
-              >
-                <Droplet className="mr-1.5 h-4 w-4" />
-                Rainy Day
-              </Button>
-              <Button
-                type="button"
                 variant={fertDueThisMonthOnly ? 'default' : 'outline'}
                 size="sm"
                 className={cn(
@@ -1231,6 +1224,24 @@ export default function LaveenGardenTracker() {
       <main className="max-w-7xl mx-auto px-6 py-10">
         {weather && (
           <div className="mb-12 bg-desert-parchment rounded-3xl p-8 border border-desert-border shadow-sm">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div className="text-sm text-desert-dust">
+                3-day forecast
+              </div>
+              {showRainyDayButton ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-full px-3 text-xs sm:text-sm"
+                  onClick={markAllWateredToday}
+                  disabled={isDemoMode || plants.length === 0}
+                >
+                  <Droplet className="mr-1.5 h-4 w-4" />
+                  Rainy Day
+                </Button>
+              ) : null}
+            </div>
             <div className="flex items-center gap-8 mb-8">
               <Sun className="h-12 w-12 text-amber-500" />
               <div>
