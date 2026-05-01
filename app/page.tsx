@@ -43,7 +43,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image as ImageIcon, Loader2, X, Sprout, Search, CalendarRange } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image as ImageIcon, Loader2, X, Sprout, Search, CalendarRange, ChevronDown } from 'lucide-react';
 import { format, addDays, differenceInDays, formatDistanceToNow, isValid, parseISO } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
@@ -167,6 +167,8 @@ export default function LaveenGardenTracker() {
   const [isUploading, setIsUploading] = useState(false);
   const [plantSearch, setPlantSearch] = useState('');
   const [fertDueThisMonthOnly, setFertDueThisMonthOnly] = useState(false);
+  const [isFertilizerOpen, setIsFertilizerOpen] = useState(true);
+  const [isGardenHeaderCollapsed, setIsGardenHeaderCollapsed] = useState(false);
   const [plantViewMode, setPlantViewMode] = useState<PlantViewMode>('list');
   const editPhotoBaselineRef = useRef<string | null>(null);
 
@@ -349,6 +351,28 @@ export default function LaveenGardenTracker() {
       void loadWeather();
     }
   }, [isAuthenticated, isDemoMode, loadWeather]);
+
+  useEffect(() => {
+    if (!isAuthenticated || loading) {
+      setIsGardenHeaderCollapsed(false);
+      return;
+    }
+
+    const collapseAt = 72;
+    const expandAt = 24;
+    const onScroll = () => {
+      const y = window.scrollY || 0;
+      setIsGardenHeaderCollapsed((prev) => {
+        if (!prev && y > collapseAt) return true;
+        if (prev && y < expandAt) return false;
+        return prev;
+      });
+    };
+
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [isAuthenticated, loading]);
 
   const refreshGarden = useCallback(async () => {
     if (isDemoMode) {
@@ -784,15 +808,35 @@ export default function LaveenGardenTracker() {
       )}
 
       <header className="sticky top-0 z-50 bg-desert-parchment/95 backdrop-blur border-b border-desert-border">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap justify-between items-center gap-3">
+        <div
+          className={cn(
+            'max-w-7xl mx-auto px-6 flex flex-wrap justify-between items-center gap-3 transition-[padding] duration-300',
+            isGardenHeaderCollapsed ? 'py-2' : 'py-4',
+          )}
+        >
           <div className="flex items-center gap-3 min-w-0">
-            <span className="text-4xl shrink-0">🌵</span>
+            <span
+              className={cn(
+                'shrink-0 transition-[font-size] duration-300',
+                isGardenHeaderCollapsed ? 'text-2xl' : 'text-4xl',
+              )}
+            >
+              🌵
+            </span>
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <div className="font-bold text-2xl sm:text-3xl tracking-tighter text-oasis">
+              <div
+                className={cn(
+                  'font-bold tracking-tighter text-oasis transition-[font-size] duration-300',
+                  isGardenHeaderCollapsed ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl',
+                )}
+              >
                 Laveen Garden
               </div>
               <span
-                className="shrink-0 rounded-full border border-desert-border/50 bg-desert-dune/40 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-oasis"
+                className={cn(
+                  'shrink-0 rounded-full border border-desert-border/50 bg-desert-dune/40 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-oasis transition-all duration-300',
+                  isGardenHeaderCollapsed && 'max-w-0 overflow-hidden border-transparent px-0 py-0 opacity-0',
+                )}
                 aria-label={`${totalPlantCount} plants in your garden`}
               >
                 {totalPlantCount} {totalPlantCount === 1 ? 'plant' : 'plants'}
@@ -993,7 +1037,15 @@ export default function LaveenGardenTracker() {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto border-t border-desert-border/30 bg-gradient-to-b from-desert-dune/35 to-desert-dune/10 px-4 pb-3 pt-3 dark:from-desert-dune/80 dark:to-desert-page/50 sm:px-6">
+        <div
+          className={cn(
+            'max-w-7xl mx-auto bg-gradient-to-b from-desert-dune/35 to-desert-dune/10 px-4 dark:from-desert-dune/80 dark:to-desert-page/50 sm:px-6 transition-all duration-300 overflow-hidden',
+            isGardenHeaderCollapsed
+              ? 'max-h-0 border-t-0 pb-0 pt-0 opacity-0'
+              : 'max-h-[320px] border-t border-desert-border/30 pb-3 pt-3 opacity-100',
+          )}
+          aria-hidden={isGardenHeaderCollapsed}
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5" role="status" aria-live="polite">
               <span className="text-xl font-semibold tabular-nums text-oasis sm:text-2xl">
@@ -1143,53 +1195,84 @@ export default function LaveenGardenTracker() {
 
         {plants.length > 0 && fertilizerUpcoming.length > 0 ? (
           <Card className="mb-10 border-amber-700/30 bg-gradient-to-br from-amber-50/90 to-desert-parchment dark:from-amber-950/40 dark:to-zinc-900 dark:border-amber-900/40">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Sprout className="h-5 w-5 text-amber-700 dark:text-amber-400" />
-                Fertilizer — coming up
-              </CardTitle>
-              <p className="text-sm text-desert-dust dark:text-zinc-300">
-                Only counts months you marked as fertilizer seasons. Northern Hemisphere: winter Dec–Feb, spring
-                Mar–May, summer Jun–Aug, fall Sep–Nov.
-              </p>
+            <CardHeader className="pb-2">
+              <button
+                type="button"
+                onClick={() => setIsFertilizerOpen((v) => !v)}
+                className="flex w-full items-start justify-between gap-3 rounded-xl text-left outline-none transition-colors hover:bg-amber-100/40 focus-visible:ring-2 focus-visible:ring-amber-500/30 dark:hover:bg-amber-950/30 -m-2 p-2"
+                aria-expanded={isFertilizerOpen}
+                aria-controls="fertilizer-upcoming-panel"
+                id="fertilizer-upcoming-toggle"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Sprout className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                    Fertilizer — coming up
+                  </CardTitle>
+                  {isFertilizerOpen ? (
+                    <p className="text-sm text-desert-dust dark:text-zinc-300">
+                      Only counts months you marked as fertilizer seasons. Northern Hemisphere: winter Dec–Feb, spring
+                      Mar–May, summer Jun–Aug, fall Sep–Nov.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-desert-dust dark:text-zinc-300">
+                      {fertilizerUpcoming.length} plant{fertilizerUpcoming.length === 1 ? '' : 's'} due.
+                    </p>
+                  )}
+                </div>
+                <ChevronDown
+                  className={cn(
+                    'mt-1 h-5 w-5 shrink-0 text-desert-dust transition-transform',
+                    isFertilizerOpen && 'rotate-180',
+                  )}
+                  aria-hidden
+                />
+              </button>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {(['overdue', 'due_soon', 'due_month'] as const).map((bucket) => {
-                const slice = fertilizerUpcoming.filter((x) => x.urgency === bucket);
-                if (slice.length === 0) return null;
-                const title =
-                  bucket === 'overdue'
-                    ? 'Overdue'
-                    : bucket === 'due_soon'
-                      ? 'Due within 7 days'
-                      : 'Due later this month';
-                return (
-                  <div key={bucket}>
-                    <h3 className="mb-2 text-sm font-semibold text-desert-ink dark:text-zinc-100">{title}</h3>
-                    <ul className="space-y-2">
-                      {slice.map(({ plant: p, next }) => (
-                        <li
-                          key={p.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist bg-white/70 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800/85"
-                        >
-                          <Link href={`/plant/${p.id}`} className="font-medium text-oasis hover:underline dark:text-emerald-300">
-                            {p.name}
-                          </Link>
-                          <span className="text-desert-dust dark:text-zinc-300">
-                            Next: {next ? format(next, 'MMM d') : '—'} ·{' '}
-                            {p.fertilizer_seasons?.map((s) => seasonLabel(s)).join(', ')}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
-            </CardContent>
+            {isFertilizerOpen ? (
+              <CardContent
+                id="fertilizer-upcoming-panel"
+                role="region"
+                aria-labelledby="fertilizer-upcoming-toggle"
+                className="space-y-6"
+              >
+                {(['overdue', 'due_soon', 'due_month'] as const).map((bucket) => {
+                  const slice = fertilizerUpcoming.filter((x) => x.urgency === bucket);
+                  if (slice.length === 0) return null;
+                  const title =
+                    bucket === 'overdue'
+                      ? 'Overdue'
+                      : bucket === 'due_soon'
+                        ? 'Due within 7 days'
+                        : 'Due later this month';
+                  return (
+                    <div key={bucket}>
+                      <h3 className="mb-2 text-sm font-semibold text-desert-ink dark:text-zinc-100">{title}</h3>
+                      <ul className="space-y-2">
+                        {slice.map(({ plant: p, next }) => (
+                          <li
+                            key={p.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-desert-mist bg-white/70 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800/85"
+                          >
+                            <Link href={`/plant/${p.id}`} className="font-medium text-oasis hover:underline dark:text-emerald-300">
+                              {p.name}
+                            </Link>
+                            <span className="text-desert-dust dark:text-zinc-300">
+                              Next: {next ? format(next, 'MMM d') : '—'} ·{' '}
+                              {p.fertilizer_seasons?.map((s) => seasonLabel(s)).join(', ')}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            ) : null}
           </Card>
         ) : null}
 
-        {plants.length > 0 ? <WateringCalendar plants={plants} numDays={14} /> : null}
+        {plants.length > 0 ? <WateringCalendar plants={plants} numDays={3} /> : null}
 
         {plants.length === 0 ? (
           <Card className="mb-16 rounded-3xl border border-desert-border bg-desert-parchment">
