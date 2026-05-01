@@ -233,6 +233,10 @@ export default function PlantProfile() {
 
   const markFertilizedFromProfile = async () => {
     if (!plant || isWriteDisabled) return;
+    if (isPlantCareDateToday(plant.last_fertilized)) {
+      toast.info(`${plant.name} is already marked as fertilized today.`);
+      return;
+    }
     setCareBusy('fert');
     try {
       const { data: logRow, error: logError } = await supabase
@@ -611,6 +615,7 @@ export default function PlantProfile() {
   const fertU = fertilizerUrgency(plant);
   const plantSeasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
   const wateredToday = isPlantCareDateToday(plant.last_watered);
+  const fertilizedToday = isPlantCareDateToday(plant.last_fertilized);
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
@@ -1000,7 +1005,7 @@ export default function PlantProfile() {
               <Button
                 type="button"
                 className="rounded-full bg-amber-600 hover:bg-amber-700 text-white"
-                disabled={isWriteDisabled || careBusy !== null}
+                disabled={isWriteDisabled || careBusy !== null || fertilizedToday}
                 onClick={() => void markFertilizedFromProfile()}
               >
                 {careBusy === 'fert' ? (

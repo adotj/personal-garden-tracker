@@ -674,6 +674,11 @@ export default function LaveenGardenTracker() {
 
   const markFertilized = async (id: string, name: string) => {
     if (isWriteDisabled) return;
+    const plant = plants.find((p) => p.id === id);
+    if (isPlantCareDateToday(plant?.last_fertilized)) {
+      toast.info(`${name} is already marked as fertilized today.`);
+      return;
+    }
 
     const { data: logRow, error: logError } = await supabase
       .from('activity_logs')
@@ -1398,7 +1403,7 @@ export default function LaveenGardenTracker() {
                             <Button
                               size="sm"
                               onClick={() => markFertilized(plant.id, plant.name)}
-                              disabled={isDemoMode}
+                              disabled={isDemoMode || isPlantCareDateToday(plant.last_fertilized)}
                               className="rounded-full bg-amber-600 text-white hover:bg-amber-700"
                             >
                               <Sprout className="mr-1 h-4 w-4" /> Fertilized
@@ -1505,7 +1510,7 @@ export default function LaveenGardenTracker() {
                       <Button
                         size="sm"
                         onClick={() => markFertilized(plant.id, plant.name)}
-                        disabled={isDemoMode}
+                        disabled={isDemoMode || isPlantCareDateToday(plant.last_fertilized)}
                         className="h-7 flex-1 rounded-full px-2 text-xs bg-amber-600 text-white hover:bg-amber-700"
                       >
                         <Sprout className="mr-1 h-3.5 w-3.5" />
@@ -1603,7 +1608,7 @@ export default function LaveenGardenTracker() {
                         <Button onClick={() => markWatered(plant.id, plant.name)} disabled={isDemoMode || isPlantCareDateToday(plant.last_watered)} className="flex-1 bg-oasis hover:bg-oasis-hover text-white rounded-full">
                           <Droplet className="mr-2 h-4 w-4" /> Watered Today
                         </Button>
-                        <Button onClick={() => markFertilized(plant.id, plant.name)} disabled={isDemoMode} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full">
+                        <Button onClick={() => markFertilized(plant.id, plant.name)} disabled={isDemoMode || isPlantCareDateToday(plant.last_fertilized)} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full">
                           <Sprout className="mr-2 h-4 w-4" /> Fertilized Today
                         </Button>
                       </div>
