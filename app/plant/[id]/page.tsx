@@ -12,7 +12,8 @@ import {
   isPlantCareDateToday,
   normalizePlantRow,
   normalizeSunExposure,
-  plantUpdatePayload,
+  plantUpdateCorePayload,
+  plantUpdateExtendedPatch,
   wateringLoggedAtIso,
 } from '@/lib/plant-helpers';
 import {
@@ -180,6 +181,14 @@ function matchLocationPreset(location: string | null | undefined): { preset: str
   return { preset: HEADER_LOCATION_OTHER, custom: t };
 }
 
+/** PostgREST: unknown column in payload (schema behind repo migrations). */
+function isSchemaColumnMissingError(error: { code?: string; message?: string | null } | null): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST204') return true;
+  const m = error.message ?? '';
+  return m.includes('Could not find the') && m.includes('column');
+}
+
 export default function PlantProfile() {
   const params = useParams();
   const router = useRouter();
@@ -318,12 +327,32 @@ export default function PlantProfile() {
       setPlant(merged);
       setHeaderSaveBusy(true);
       try {
-        const { error } = await supabase
+        const { error: coreError } = await supabase
           .from('plants')
-          .update(plantUpdatePayload(merged))
+          .update(plantUpdateCorePayload(merged))
           .eq('id', plantId);
-        if (error) throw error;
-        toast.success('Saved', { duration: 2000 });
+        if (coreError) throw coreError;
+
+        const { error: extError } = await supabase
+          .from('plants')
+          .update(plantUpdateExtendedPatch(merged))
+          .eq('id', plantId);
+
+        if (extError) {
+          if (isSchemaColumnMissingError(extError)) {
+            console.warn('plants extended columns missing or outdated schema:', extError.message);
+            toast.success('Saved container & pot', { duration: 2200 });
+            toast.message('Sun / location not synced to database', {
+              description: 'Your Supabase project is missing newer columns (e.g. sun_exposure). Apply repo migrations to plants, then save again.',
+              duration: 8000,
+            });
+          } else {
+            throw extError;
+          }
+        } else {
+          toast.success('Saved', { duration: 2000 });
+        }
+
         headerBaselineRef.current = {
           container_type: merged.container_type,
           pot_size: merged.pot_size,
