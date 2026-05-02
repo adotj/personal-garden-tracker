@@ -50,6 +50,7 @@ import { format, addDays, differenceInDays, formatDistanceToNow, isValid, parseI
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { cn } from '@/lib/utils';
+import { usdaHardinessZoneLabel } from '@/lib/garden-site';
 
 type Activity = {
   id: string;
@@ -979,6 +980,15 @@ export default function LaveenGardenTracker() {
               >
                 {totalPlantCount} {totalPlantCount === 1 ? 'plant' : 'plants'}
                 {isDemoMode ? ' · demo' : ''}
+              </span>
+              <span
+                className={cn(
+                  'shrink-0 rounded-full border border-desert-border/50 bg-desert-dune/40 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-oasis transition-all duration-300',
+                  isGardenHeaderCollapsed && 'max-w-0 overflow-hidden border-transparent px-0 py-0 opacity-0',
+                )}
+                title="USDA Plant Hardiness Zone"
+              >
+                {usdaHardinessZoneLabel()}
               </span>
             </div>
           </div>

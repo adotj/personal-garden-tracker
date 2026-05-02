@@ -8,6 +8,7 @@ import {
   normalizeFertilizerSeasons,
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
+import { usdaHardinessZoneLabel } from '@/lib/garden-site';
 
 function fmtDay(iso: string | null | undefined): string {
   if (!iso) return 'Not recorded';
@@ -43,6 +44,7 @@ export function buildPlantTroubleshootingPrompt(
   lines.push('The grower may follow up with symptoms, photos, or questions.');
   lines.push('');
   lines.push('## Garden context');
+  lines.push(`- **USDA plant hardiness zone:** ${usdaHardinessZoneLabel()}`);
   lines.push('- **Climate:** Low desert / hot, dry conditions (southwest US). Intense sun and heat stress small containers quickly.');
   lines.push('- **Setup:** Container garden (pots, grow bags, or raised containers), not in-ground landscape.');
   lines.push('');
