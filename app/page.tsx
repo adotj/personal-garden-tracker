@@ -45,7 +45,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image as ImageIcon, Loader2, X, Sprout, Search, CalendarRange, ChevronDown } from 'lucide-react';
+import { Plus, Droplet, Edit, Trash2, Sun, History, Moon, Sun as SunIcon, Trash, Lock, AlertTriangle, Image as ImageIcon, Loader2, X, Sprout, Search, CalendarRange, ChevronDown, Copy } from 'lucide-react';
 import { format, addDays, differenceInDays, formatDistanceToNow, isValid, parseISO } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
@@ -154,6 +154,11 @@ function getWeatherIcon(code: number): string {
   if (code <= 67 || code <= 82) return '🌧️';
   if (code <= 86) return '❄️';
   return '☁️';
+}
+
+function toCsvCell(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
 }
 
 const DEMO_PASSWORD = "demo";
@@ -500,6 +505,27 @@ export default function LaveenGardenTracker() {
         return ta - tb;
       });
   }, [plants]);
+
+  const allPlantNamesCsv = useMemo(
+    () => plants.map((plant) => toCsvCell(plant.name.trim())).join(', '),
+    [plants],
+  );
+
+  const copyAllPlantNames = async () => {
+    if (plants.length === 0) {
+      toast.info('No plant names to copy yet.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(allPlantNamesCsv);
+      toast.success(
+        `Copied ${plants.length} plant name${plants.length === 1 ? '' : 's'} to clipboard.`,
+      );
+    } catch {
+      toast.error('Could not copy plant names from this browser.');
+    }
+  };
 
   const logActivity = async (action: string, plant_name?: string, details?: string | null) => {
     if (isWriteDisabled) return;
@@ -1218,6 +1244,17 @@ export default function LaveenGardenTracker() {
               >
                 <CalendarRange className="mr-1.5 h-4 w-4" />
                 Due this month
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 shrink-0 rounded-full px-3 text-xs sm:text-sm"
+                onClick={copyAllPlantNames}
+                disabled={plants.length === 0}
+              >
+                <Copy className="mr-1.5 h-4 w-4" />
+                Copy names
               </Button>
               <div
                 className="flex h-10 shrink-0 items-center rounded-full border border-desert-border/50 bg-desert-parchment/70 p-1"
