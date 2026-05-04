@@ -184,6 +184,7 @@ export default function LaveenGardenTracker() {
   const [isFertilizerOpen, setIsFertilizerOpen] = useState(false);
   const [isGardenHeaderCollapsed, setIsGardenHeaderCollapsed] = useState(false);
   const [plantViewMode, setPlantViewMode] = useState<PlantViewMode>('list');
+  const [bulkWateringTodayBusy, setBulkWateringTodayBusy] = useState(false);
   const editPhotoBaselineRef = useRef<string | null>(null);
   const lastScrollYRef = useRef(0);
 
@@ -785,6 +786,53 @@ export default function LaveenGardenTracker() {
     toast.success(`✅ ${name} marked watered`);
     fetchPlants();
     fetchActivities();
+  };
+
+  const markSelectedTodayPlantsWatered = async (plantIds: string[]): Promise<boolean> => {
+    if (isWriteDisabled) return false;
+    const uniqueIds = Array.from(new Set(plantIds));
+    if (uniqueIds.length === 0) {
+      toast.info('Select at least one plant due today.');
+      return false;
+    }
+    const selectedIdSet = new Set(uniqueIds);
+    const selectedPlants = plants.filter((plant) => selectedIdSet.has(plant.id));
+    if (selectedPlants.length === 0) {
+      toast.info('Those plants are no longer in today’s due list.');
+      return false;
+    }
+    const pendingPlants = selectedPlants.filter((plant) => !isPlantCareDateToday(plant.last_watered));
+    if (pendingPlants.length === 0) {
+      toast.info('Selected plants are already marked watered today.');
+      return false;
+    }
+
+    setBulkWateringTodayBusy(true);
+    const when = wateringLoggedAtIso();
+    const pendingIds = pendingPlants.map((plant) => plant.id);
+    const pendingIdSet = new Set(pendingIds);
+    const { error } = await supabase.from('plants').update({ last_watered: when }).in('id', pendingIds);
+    setBulkWateringTodayBusy(false);
+    if (error) {
+      const parts = [error.message, error.details, error.hint].filter(
+        (s): s is string => typeof s === 'string' && s.trim().length > 0,
+      );
+      toast.error(parts.length > 0 ? parts.join(' — ') : 'Could not mark selected plants watered');
+      return false;
+    }
+
+    setPlants((prev) =>
+      prev.map((plant) => (pendingIdSet.has(plant.id) ? { ...plant, last_watered: when } : plant)),
+    );
+    const whenLabel = formatPlantCareInstant(when, 'profile');
+    await logActivity(
+      'Plant Watered',
+      undefined,
+      `Bulk watered ${pendingPlants.length} plant${pendingPlants.length === 1 ? '' : 's'}. Last watered is now ${whenLabel}.`,
+    );
+    toast.success(`✅ Marked ${pendingPlants.length} plant${pendingPlants.length === 1 ? '' : 's'} watered.`);
+    await fetchActivities();
+    return true;
   };
 
   const markAllWateredToday = async () => {
@@ -1475,7 +1523,15 @@ export default function LaveenGardenTracker() {
           </Card>
         ) : null}
 
-        {plants.length > 0 ? <WateringCalendar plants={plants} numDays={3} /> : null}
+        {plants.length > 0 ? (
+          <WateringCalendar
+            plants={plants}
+            numDays={3}
+            onMarkTodayPlantsWatered={markSelectedTodayPlantsWatered}
+            bulkActionDisabled={isDemoMode}
+            bulkActionBusy={bulkWateringTodayBusy}
+          />
+        ) : null}
 
         {plants.length === 0 ? (
           <Card className="mb-16 rounded-3xl border border-desert-border bg-desert-parchment">

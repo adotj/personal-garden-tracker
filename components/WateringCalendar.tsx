@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Plant } from '@/lib/plant-types';
 import { buildWateringCalendar } from '@/lib/watering-calendar';
@@ -13,17 +13,59 @@ import { cn } from '@/lib/utils';
 type Props = {
   plants: Plant[];
   numDays?: number;
+  onMarkTodayPlantsWatered?: (plantIds: string[]) => Promise<boolean>;
+  bulkActionDisabled?: boolean;
+  bulkActionBusy?: boolean;
 };
 
-export function WateringCalendar({ plants, numDays = 14 }: Props) {
+export function WateringCalendar({
+  plants,
+  numDays = 14,
+  onMarkTodayPlantsWatered,
+  bulkActionDisabled = false,
+  bulkActionBusy = false,
+}: Props) {
   const [open, setOpen] = useState(false);
+  const [selectedTodayIds, setSelectedTodayIds] = useState<string[]>([]);
   const rows = useMemo(() => buildWateringCalendar(plants, numDays), [plants, numDays]);
   const today = useMemo(() => new Date(), []);
+  const todayRow = useMemo(() => rows.find((row) => isSameDay(row.at, today)) ?? null, [rows, today]);
+  const dueToday = todayRow?.plants ?? [];
+  const dueTodayIdSet = useMemo(() => new Set(dueToday.map((p) => p.id)), [dueToday]);
+  const selectedTodayIdSet = useMemo(() => new Set(selectedTodayIds), [selectedTodayIds]);
+  const canBulkMarkToday = !!onMarkTodayPlantsWatered && !bulkActionDisabled;
+
+  useEffect(() => {
+    setSelectedTodayIds((prev) => prev.filter((id) => dueTodayIdSet.has(id)));
+  }, [dueTodayIdSet]);
 
   if (plants.length === 0) return null;
 
   const rangeLabel = `${format(rows[0]?.at ?? today, 'MMM d')} – ${format(rows[rows.length - 1]?.at ?? today, 'MMM d, yyyy')}`;
   const daysWithPlants = rows.filter((r) => r.plants.length > 0).length;
+
+  const toggleTodaySelection = (plantId: string) => {
+    setSelectedTodayIds((prev) => {
+      if (prev.includes(plantId)) return prev.filter((id) => id !== plantId);
+      return [...prev, plantId];
+    });
+  };
+
+  const selectOrClearAllToday = () => {
+    if (selectedTodayIds.length === dueToday.length) {
+      setSelectedTodayIds([]);
+      return;
+    }
+    setSelectedTodayIds(dueToday.map((p) => p.id));
+  };
+
+  const markSelectedTodayPlants = async () => {
+    if (!onMarkTodayPlantsWatered || selectedTodayIds.length === 0) return;
+    const updated = await onMarkTodayPlantsWatered(selectedTodayIds);
+    if (updated) {
+      setSelectedTodayIds([]);
+    }
+  };
 
   return (
     <Card className="mb-10 border-sky-800/20 bg-gradient-to-br from-sky-50/90 to-desert-parchment dark:from-sky-950/35 dark:to-desert-parchment dark:border-sky-900/40">
@@ -104,18 +146,56 @@ export function WateringCalendar({ plants, numDays = 14 }: Props) {
                   {row.plants.length === 0 ? (
                     <p className="text-sm text-desert-dust">Nothing scheduled</p>
                   ) : (
-                    <ul className="flex flex-wrap gap-1.5">
+                    <>
+                      {isToday && canBulkMarkToday ? (
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={selectOrClearAllToday}
+                            disabled={bulkActionBusy || row.plants.length === 0}
+                            className="inline-flex items-center rounded-full border border-desert-border bg-white/80 px-2.5 py-1 text-[11px] font-medium text-desert-sage transition-colors hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-desert-dune/60"
+                          >
+                            {selectedTodayIds.length === row.plants.length ? 'Clear selection' : 'Select all due today'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void markSelectedTodayPlants()}
+                            disabled={bulkActionBusy || selectedTodayIds.length === 0}
+                            className="inline-flex items-center rounded-full bg-oasis px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-oasis-hover disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {bulkActionBusy ? 'Saving…' : `Mark selected watered (${selectedTodayIds.length})`}
+                          </button>
+                        </div>
+                      ) : null}
+                      <ul className="flex flex-wrap gap-1.5">
                       {row.plants.map((p) => (
                         <li key={p.id}>
-                          <Link
-                            href={`/plant/${p.id}`}
-                            className="inline-flex items-center rounded-full border border-desert-border bg-white/90 px-2.5 py-1 text-xs font-medium text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50"
-                          >
-                            {p.name}
-                          </Link>
+                          {isToday && canBulkMarkToday ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleTodaySelection(p.id)}
+                              aria-pressed={selectedTodayIdSet.has(p.id)}
+                              className={cn(
+                                'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                                selectedTodayIdSet.has(p.id)
+                                  ? 'border-sky-600 bg-sky-100 text-sky-900 hover:bg-sky-200 dark:border-sky-500 dark:bg-sky-900/70 dark:text-sky-100'
+                                  : 'border-desert-border bg-white/90 text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50',
+                              )}
+                            >
+                              {p.name}
+                            </button>
+                          ) : (
+                            <Link
+                              href={`/plant/${p.id}`}
+                              className="inline-flex items-center rounded-full border border-desert-border bg-white/90 px-2.5 py-1 text-xs font-medium text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50"
+                            >
+                              {p.name}
+                            </Link>
+                          )}
                         </li>
                       ))}
-                    </ul>
+                      </ul>
+                    </>
                   )}
                 </div>
               </div>
