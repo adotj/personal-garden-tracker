@@ -6,7 +6,7 @@ import type { Plant } from '@/lib/plant-types';
 import { buildWateringCalendar } from '@/lib/watering-calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, ChevronDown, Droplet } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, Droplet } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -168,32 +168,50 @@ export function WateringCalendar({
                         </div>
                       ) : null}
                       <ul className="flex flex-wrap gap-1.5">
-                      {row.plants.map((p) => (
-                        <li key={p.id}>
-                          {isToday && canBulkMarkToday ? (
-                            <button
-                              type="button"
-                              onClick={() => toggleTodaySelection(p.id)}
-                              aria-pressed={selectedTodayIdSet.has(p.id)}
-                              className={cn(
-                                'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-                                selectedTodayIdSet.has(p.id)
-                                  ? 'border-sky-600 bg-sky-100 text-sky-900 hover:bg-sky-200 dark:border-sky-500 dark:bg-sky-900/70 dark:text-sky-100'
-                                  : 'border-desert-border bg-white/90 text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50',
-                              )}
-                            >
-                              {p.name}
-                            </button>
-                          ) : (
-                            <Link
-                              href={`/plant/${p.id}`}
-                              className="inline-flex items-center rounded-full border border-desert-border bg-white/90 px-2.5 py-1 text-xs font-medium text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50"
-                            >
-                              {p.name}
-                            </Link>
-                          )}
-                        </li>
-                      ))}
+                      {row.plants.map((p) => {
+                        const isSelected = selectedTodayIdSet.has(p.id);
+                        return (
+                          <li key={p.id}>
+                            {isToday && canBulkMarkToday ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <Link
+                                  href={`/plant/${p.id}`}
+                                  className={cn(
+                                    'inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                                    isSelected
+                                      ? 'border-sky-600 bg-sky-100 text-sky-900 hover:bg-sky-200 dark:border-sky-500 dark:bg-sky-900/70 dark:text-sky-100'
+                                      : 'border-desert-border bg-white/90 text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50',
+                                  )}
+                                >
+                                  {p.name}
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTodaySelection(p.id)}
+                                  disabled={bulkActionBusy}
+                                  aria-pressed={isSelected}
+                                  aria-label={`${isSelected ? 'Deselect' : 'Select'} ${p.name} for bulk watering`}
+                                  className={cn(
+                                    'inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                                    isSelected
+                                      ? 'border-sky-600 bg-sky-600 text-white hover:bg-sky-700'
+                                      : 'border-desert-border bg-white/90 text-desert-sage hover:bg-sky-50 dark:bg-desert-dune/60',
+                                  )}
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <Link
+                                href={`/plant/${p.id}`}
+                                className="inline-flex items-center rounded-full border border-desert-border bg-white/90 px-2.5 py-1 text-xs font-medium text-oasis hover:bg-sky-50 dark:bg-desert-dune/60 dark:hover:bg-desert-mist/50"
+                              >
+                                {p.name}
+                              </Link>
+                            )}
+                          </li>
+                        );
+                      })}
                       </ul>
                     </>
                   )}
