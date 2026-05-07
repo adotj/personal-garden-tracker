@@ -77,7 +77,6 @@ self.addEventListener("push", (event) => {
     data: {
       url: payload.url || "/",
     },
-    timestamp: payload.timestamp,
     requireInteraction: payload.requireInteraction ?? false,
   };
 
