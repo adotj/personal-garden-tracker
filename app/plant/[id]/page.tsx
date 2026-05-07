@@ -60,6 +60,8 @@ import {
 import { format, isValid } from 'date-fns';
 import { addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { calculateWateringAdjustment, fetchPhoenixForecast } from '@/lib/weather';
+import type { Forecast } from '@/lib/weather';
 
 type PlantPhotoRow = {
   id: string;
@@ -92,11 +94,16 @@ function isFertLogAction(action: string) {
   return action.toLowerCase().includes('fertiliz');
 }
 
-function formatDueLine(iso: string | null, freqDays: number): string {
-  if (!iso || freqDays < 1) return '';
+function waterDueDate(iso: string | null, freqDays: number): Date | null {
+  if (!iso || freqDays < 1) return null;
   const last = new Date(iso);
   const due = addDays(last, freqDays);
-  if (!isValid(last) || !isValid(due)) return '';
+  if (!isValid(last) || !isValid(due)) return null;
+  return due;
+}
+
+function formatDueLine(due: Date | null): string {
+  if (!due || !isValid(due)) return '';
   return `Next due ~ ${format(due, 'MMM d, yyyy')}`;
 }
 
@@ -218,6 +225,7 @@ export default function PlantProfile() {
     lastWatered: '',
   });
   const [wateringSettingsBusy, setWateringSettingsBusy] = useState(false);
+  const [forecast, setForecast] = useState<Forecast | null>(null);
   const [plantNoteEntries, setPlantNoteEntries] = useState<PlantNoteEntry[]>([]);
   const [newNoteText, setNewNoteText] = useState('');
   const [noteAddBusy, setNoteAddBusy] = useState(false);
@@ -714,6 +722,20 @@ export default function PlantProfile() {
   }, [plantId, fetchPlant, fetchPhotos, fetchFertilizerLogs, fetchPlantNoteEntries, fetchActivities]);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetchPhoenixForecast()
+      .then((data) => {
+        if (!cancelled) setForecast(data);
+      })
+      .catch(() => {
+        if (!cancelled) setForecast(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!plant) return;
     setWateringDraft({
       frequencyDays: String(plant.watering_frequency_days),
@@ -995,6 +1017,10 @@ export default function PlantProfile() {
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
+  const baseWaterDue = waterDueDate(plant.last_watered, plant.watering_frequency_days);
+  const wateringAdjustment =
+    baseWaterDue && forecast ? calculateWateringAdjustment(plant, forecast) : null;
+  const displayedWaterDue = wateringAdjustment?.adjustedDueDate ?? baseWaterDue;
   const wateringDraftMatchesPlant =
     wateringDraft.frequencyDays.trim() === String(plant.watering_frequency_days) &&
     wateringDraft.lastWatered === isoOrDateToDateInputValue(plant.last_watered);
@@ -1505,8 +1531,20 @@ export default function PlantProfile() {
                   </p>
                   <p className="text-sm text-desert-sage dark:text-zinc-300">
                     Every {plant.watering_frequency_days} day{plant.watering_frequency_days === 1 ? '' : 's'} ·{' '}
-                    {formatDueLine(plant.last_watered, plant.watering_frequency_days) || '—'}
+                    {formatDueLine(displayedWaterDue) || '—'}
                   </p>
+                  {wateringAdjustment && wateringAdjustment.daysShift !== 0 ? (
+                    <p
+                      className={cn(
+                        'mt-2 rounded-xl border px-2.5 py-1.5 text-xs leading-relaxed',
+                        wateringAdjustment.daysShift < 0
+                          ? 'border-orange-300/80 bg-orange-50 text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/30 dark:text-orange-200'
+                          : 'border-sky-300/80 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200',
+                      )}
+                    >
+                      {wateringAdjustment.reason}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex gap-3 rounded-2xl border border-desert-mist/80 bg-white/50 p-4 dark:border-zinc-600 dark:bg-zinc-800/85">

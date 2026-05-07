@@ -6,31 +6,35 @@ import type { Plant } from '@/lib/plant-types';
 import { format, addDays, differenceInDays, isValid } from 'date-fns';
 import { fertilizerDueSoonOrOverdue, fertilizerUrgency, formatNextFertilizationDue } from '@/lib/fertilizer-schedule';
 import { isPlantCareDateToday } from '@/lib/plant-helpers';
+import { calculateWateringAdjustment } from '@/lib/weather';
+import type { Forecast } from '@/lib/weather';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Droplet, Edit, Sprout, Trash2 } from 'lucide-react';
 
-function safeFormatDue(iso: string | null, freqDays: number): string {
-  if (!iso || freqDays < 1) return '';
+function wateringDueDate(iso: string | null, freqDays: number): Date | null {
+  if (!iso || freqDays < 1) return null;
   const last = new Date(iso);
   const due = addDays(last, freqDays);
-  if (!isValid(last) || !isValid(due)) return '';
+  if (!isValid(last) || !isValid(due)) return null;
+  return due;
+}
+
+function safeFormatDue(due: Date | null): string {
+  if (!due || !isValid(due)) return '';
   return format(due, 'MMM d');
 }
 
-function waterDueSoon(plant: Plant): boolean {
-  if (!plant.last_watered) return true;
-  const freq = plant.watering_frequency_days || 7;
-  const last = new Date(plant.last_watered);
-  const due = addDays(last, freq);
-  if (!isValid(last) || !isValid(due)) return true;
+function waterDueSoon(due: Date | null): boolean {
+  if (!due) return true;
   return differenceInDays(due, new Date()) <= 2;
 }
 
 type PlantCardProps = {
   plant: Plant;
+  forecast: Forecast | null;
   isDemoMode: boolean;
   onMarkWatered: (id: string, name: string) => void;
   onMarkFertilized: (id: string, name: string) => void;
@@ -40,13 +44,17 @@ type PlantCardProps = {
 
 export function PlantCard({
   plant,
+  forecast,
   isDemoMode,
   onMarkWatered,
   onMarkFertilized,
   onEdit,
   onDelete,
 }: PlantCardProps) {
-  const showWaterDue = waterDueSoon(plant);
+  const baseDueDate = wateringDueDate(plant.last_watered, plant.watering_frequency_days);
+  const wateringAdjustment = baseDueDate && forecast ? calculateWateringAdjustment(plant, forecast) : null;
+  const displayDueDate = wateringAdjustment?.adjustedDueDate ?? baseDueDate;
+  const showWaterDue = waterDueSoon(displayDueDate);
   const showFertStress = fertilizerDueSoonOrOverdue(plant);
   const fertU = fertilizerUrgency(plant);
 
@@ -98,7 +106,7 @@ export function PlantCard({
                 : 'text-desert-sage',
             )}
           >
-            Water due {safeFormatDue(plant.last_watered, plant.watering_frequency_days) || '—'}
+            Next due {safeFormatDue(displayDueDate) || '—'}
           </p>
           <p
             className={cn(
@@ -110,6 +118,18 @@ export function PlantCard({
             Fert {formatNextFertilizationDue(plant)}
           </p>
         </div>
+        {wateringAdjustment && wateringAdjustment.daysShift !== 0 ? (
+          <div
+            className={cn(
+              'rounded-lg border px-2 py-1 text-[10px] leading-snug',
+              wateringAdjustment.daysShift < 0
+                ? 'border-orange-300/80 bg-orange-50 text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/30 dark:text-orange-200'
+                : 'border-sky-300/80 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200',
+            )}
+          >
+            {wateringAdjustment.reason}
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-1.5 pt-0.5">
           {fertU === 'off_season' ? (
             <Badge variant="secondary" className="text-[10px] font-normal">
