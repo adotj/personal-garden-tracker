@@ -736,7 +736,7 @@ export function GardenPageClient() {
               <DialogHeader>
                 <DialogTitle className="text-oasis">Add New Plant</DialogTitle>
               </DialogHeader>
-              <form onSubmit={addPlant} className="flex flex-col space-y-4 sm:space-y-5">
+              <form onSubmit={addPlant} className="flex w-full flex-col space-y-4 overflow-x-hidden sm:space-y-5">
                 {/* Added: desert quick-add library (searchable, category-filtered). */}
                 <div className="w-full max-w-full space-y-3 overflow-hidden rounded-2xl border border-desert-border bg-desert-parchment/70 px-3 py-3 shadow-sm sm:px-4 sm:py-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -751,8 +751,8 @@ export function GardenPageClient() {
                     placeholder="Search Phoenix-friendly plants..."
                     className="h-9 w-full px-3 py-2 text-sm"
                   />
-                  <div className="w-full overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <div className="flex min-w-full flex-nowrap snap-x snap-mandatory gap-2">
+                  <div className="w-full pb-1">
+                    <div className="flex w-full flex-wrap gap-2">
                       {DESERT_PRESET_FILTERS.map((category) => {
                         const active = desertPresetFilter === category;
                         return (
@@ -762,7 +762,7 @@ export function GardenPageClient() {
                             size="sm"
                             variant={active ? 'secondary' : 'outline'}
                             className={cn(
-                              'h-8 shrink-0 snap-start whitespace-nowrap rounded-full px-3 text-xs sm:h-7 sm:text-[0.8rem]',
+                              'h-8 whitespace-nowrap rounded-full px-3 text-xs sm:h-7 sm:text-[0.8rem]',
                               active && 'bg-oasis/10 text-oasis',
                             )}
                             onClick={() => setDesertPresetFilter(category)}
@@ -780,15 +780,15 @@ export function GardenPageClient() {
                           key={preset.id}
                           type="button"
                           onClick={() => applyDesertPlantPreset(preset)}
-                          className="w-full rounded-xl border border-desert-border bg-white/70 px-3 py-2.5 text-left text-sm transition-colors hover:border-oasis/40 hover:bg-oasis/5 sm:px-4 sm:py-3 dark:bg-zinc-900/60"
+                          className="w-full overflow-hidden rounded-xl border border-desert-border bg-white/70 px-3 py-2.5 text-left text-sm transition-colors hover:border-oasis/40 hover:bg-oasis/5 sm:px-4 sm:py-3 dark:bg-zinc-900/60"
                         >
                           <div className="flex w-full min-w-0 flex-col items-start gap-1">
-                            <p className="w-full min-w-0 truncate font-medium text-desert-ink dark:text-zinc-100">{preset.name}</p>
+                            <p className="w-full min-w-0 truncate break-words font-medium text-desert-ink dark:text-zinc-100">{preset.name}</p>
                             <Badge variant="outline" className="max-w-full truncate border-desert-border text-desert-dust">
                               {preset.category}
                             </Badge>
                           </div>
-                          <p className="mt-1 overflow-hidden text-xs leading-4 text-desert-dust [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                          <p className="mt-1 break-words overflow-hidden text-xs leading-4 text-desert-dust [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
                             {preset.phoenix_notes}
                           </p>
                         </button>
