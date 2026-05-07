@@ -59,6 +59,7 @@ import {
 import { GardenHeader, GardenWeather } from '@/components/GardenHeader';
 import { PlantGrid } from '@/components/PlantGrid';
 import { ActivityLog } from '@/components/ActivityLog';
+import { PushNotificationCard } from '@/components/PushNotificationCard';
 
 const DEMO_PASSWORD = 'demo';
 const REAL_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || 'changeme';
@@ -983,6 +984,7 @@ export function GardenPageClient() {
           onMarkAllWateredToday={markAllWateredToday}
           rainyDayDisabled={isDemoMode || plants.length === 0}
         />
+        <PushNotificationCard isDemoMode={isDemoMode} plantCount={plants.length} />
 
         {plants.length > 0 && fertilizerUpcoming.length > 0 ? (
           <Card className="mb-10 border-amber-700/30 bg-gradient-to-br from-amber-50/90 to-desert-parchment dark:from-amber-950/40 dark:to-zinc-900 dark:border-amber-900/40">
