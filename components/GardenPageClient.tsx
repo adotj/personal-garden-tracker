@@ -732,13 +732,13 @@ export function GardenPageClient() {
                 <Plus className="h-4 w-4 mr-1" /> New Plant
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[min(92vh,720px)] max-w-[calc(100%-1rem)] overflow-y-auto p-3 sm:max-w-lg sm:p-4">
+            <DialogContent className="max-h-[min(92vh,720px)] w-full max-w-[95vw] overflow-x-hidden overflow-y-auto p-3 sm:max-w-lg sm:p-4">
               <DialogHeader>
                 <DialogTitle className="text-oasis">Add New Plant</DialogTitle>
               </DialogHeader>
-              <form onSubmit={addPlant} className="space-y-4 sm:space-y-5">
+              <form onSubmit={addPlant} className="w-full max-w-full space-y-4 sm:space-y-5">
                 {/* Added: desert quick-add library (searchable, category-filtered). */}
-                <div className="space-y-3 rounded-2xl border border-desert-border bg-desert-parchment/70 p-3 shadow-sm sm:p-4">
+                <div className="w-full max-w-full overflow-hidden space-y-3 rounded-2xl border border-desert-border bg-desert-parchment/70 p-3 shadow-sm sm:p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label className="text-sm font-semibold text-oasis">Quick Add from Desert Library</Label>
                     <Badge variant="outline" className="border-desert-border text-desert-sage">
@@ -749,10 +749,10 @@ export function GardenPageClient() {
                     value={desertPresetSearch}
                     onChange={(e) => setDesertPresetSearch(e.target.value)}
                     placeholder="Search Phoenix-friendly plants..."
-                    className="h-9 w-full px-3 text-sm"
+                    className="h-9 w-full max-w-full px-3 text-sm"
                   />
-                  <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <div className="flex w-max min-w-full snap-x snap-mandatory gap-2 sm:w-full sm:flex-wrap">
+                  <div className="w-full max-w-full overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex flex-nowrap gap-2 snap-x snap-mandatory">
                       {DESERT_PRESET_FILTERS.map((category) => {
                         const active = desertPresetFilter === category;
                         return (
@@ -773,18 +773,20 @@ export function GardenPageClient() {
                       })}
                     </div>
                   </div>
-                  <div className="max-h-52 space-y-2 overflow-y-auto pr-1 sm:max-h-56">
+                  <div className="w-full max-w-full max-h-52 space-y-2 overflow-x-hidden overflow-y-auto sm:max-h-56">
                     {filteredDesertPresets.length > 0 ? (
                       filteredDesertPresets.map((preset) => (
                         <button
                           key={preset.id}
                           type="button"
                           onClick={() => applyDesertPlantPreset(preset)}
-                          className="w-full rounded-xl border border-desert-border bg-white/70 p-2.5 text-left transition-colors hover:border-oasis/40 hover:bg-oasis/5 sm:p-3 dark:bg-zinc-900/60"
+                          className="w-full max-w-full rounded-xl border border-desert-border bg-white/70 px-3 py-2.5 text-left transition-colors hover:border-oasis/40 hover:bg-oasis/5 sm:px-4 sm:py-3 dark:bg-zinc-900/60"
                         >
-                          <div className="flex min-w-0 items-start justify-between gap-2">
-                            <p className="min-w-0 flex-1 truncate font-medium text-desert-ink dark:text-zinc-100">{preset.name}</p>
-                            <Badge variant="outline" className="max-w-[8.75rem] shrink-0 truncate border-desert-border text-desert-dust">
+                          <div className="flex w-full min-w-0 flex-col items-start space-y-1">
+                            <p className="w-full min-w-0 overflow-hidden text-sm font-medium leading-5 text-desert-ink [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] dark:text-zinc-100 sm:text-base">
+                              {preset.name}
+                            </p>
+                            <Badge variant="outline" className="max-w-full border-desert-border text-desert-dust">
                               {preset.category}
                             </Badge>
                           </div>
