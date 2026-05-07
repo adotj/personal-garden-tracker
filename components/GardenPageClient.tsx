@@ -732,14 +732,14 @@ export function GardenPageClient() {
                 <Plus className="h-4 w-4 mr-1" /> New Plant
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[min(90vh,720px)] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="max-h-[min(90dvh,720px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-x-hidden overflow-y-auto p-3 sm:max-w-lg sm:p-4">
               <DialogHeader>
                 <DialogTitle className="text-oasis">Add New Plant</DialogTitle>
               </DialogHeader>
               <form onSubmit={addPlant} className="space-y-5">
                 {/* Added: desert quick-add library (searchable, category-filtered). */}
-                <div className="space-y-3 rounded-2xl border border-desert-border bg-desert-parchment/70 p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
+                <div className="space-y-3 rounded-2xl border border-desert-border bg-desert-parchment/70 p-3 shadow-sm sm:p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label className="text-sm font-semibold text-oasis">Quick Add from Desert Library</Label>
                     <Badge variant="outline" className="border-desert-border text-desert-sage">
                       {filteredDesertPresets.length} matches
@@ -749,8 +749,9 @@ export function GardenPageClient() {
                     value={desertPresetSearch}
                     onChange={(e) => setDesertPresetSearch(e.target.value)}
                     placeholder="Search Phoenix-friendly plants..."
+                    className="h-10 w-full rounded-xl px-3 text-sm sm:text-base"
                   />
-                  <div className="flex gap-2 overflow-x-auto pb-1">
+                  <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
                     {DESERT_PRESET_FILTERS.map((category) => {
                       const active = desertPresetFilter === category;
                       return (
@@ -759,7 +760,10 @@ export function GardenPageClient() {
                           type="button"
                           size="sm"
                           variant={active ? 'secondary' : 'outline'}
-                          className={cn('whitespace-nowrap rounded-full', active && 'bg-oasis/10 text-oasis')}
+                          className={cn(
+                            'shrink-0 snap-start whitespace-nowrap rounded-full px-3 text-xs sm:text-sm',
+                            active && 'bg-oasis/10 text-oasis',
+                          )}
                           onClick={() => setDesertPresetFilter(category)}
                         >
                           {category}
@@ -767,22 +771,34 @@ export function GardenPageClient() {
                       );
                     })}
                   </div>
-                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                  <div className="max-h-52 space-y-2 overflow-y-auto pr-1 sm:max-h-56">
                     {filteredDesertPresets.length > 0 ? (
                       filteredDesertPresets.map((preset) => (
                         <button
                           key={preset.id}
                           type="button"
                           onClick={() => applyDesertPlantPreset(preset)}
-                          className="w-full rounded-xl border border-desert-border bg-white/70 p-3 text-left transition-colors hover:border-oasis/40 hover:bg-oasis/5 dark:bg-zinc-900/60"
+                          className="w-full rounded-xl border border-desert-border bg-white/70 p-2.5 text-left transition-colors hover:border-oasis/40 hover:bg-oasis/5 dark:bg-zinc-900/60 sm:p-3"
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium text-desert-ink dark:text-zinc-100">{preset.name}</p>
-                            <Badge variant="outline" className="border-desert-border text-desert-dust">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-desert-ink dark:text-zinc-100 sm:text-base">
+                                {preset.name}
+                              </p>
+                              <p className="truncate text-[11px] text-desert-dust sm:text-xs">
+                                {preset.species}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="shrink-0 border-desert-border text-[10px] text-desert-dust sm:text-xs"
+                            >
                               {preset.category}
                             </Badge>
                           </div>
-                          <p className="mt-1 text-xs text-desert-dust">{preset.phoenix_notes}</p>
+                          <p className="mt-1 text-[11px] leading-4 text-desert-dust [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden sm:text-xs">
+                            {preset.phoenix_notes}
+                          </p>
                         </button>
                       ))
                     ) : (
@@ -796,7 +812,7 @@ export function GardenPageClient() {
                   <Label>Plant Name</Label>
                   <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <Label>Container Type</Label>
                     <Select value={newPlant.container_type} onValueChange={(v) => handleContainerTypeChange(v)}>
@@ -846,7 +862,7 @@ export function GardenPageClient() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <Label>Water every (days)</Label>
                     <Input
@@ -884,7 +900,7 @@ export function GardenPageClient() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <Label>Last watered</Label>
                     <Input
