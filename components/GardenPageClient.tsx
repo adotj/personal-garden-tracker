@@ -26,6 +26,7 @@ import {
 import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,11 @@ import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { cn } from '@/lib/utils';
 import type { NewPlantForm } from '@/lib/garden-types';
+import {
+  DESERT_PLANT_CATEGORIES,
+  type DesertPlantPreset,
+  desertPlantPresets,
+} from '@/lib/desert-plant-presets';
 import { usePlants } from '@/hooks/use-plants';
 import { useActivities } from '@/hooks/use-activities';
 import { useWeather } from '@/hooks/use-weather';
@@ -62,6 +68,32 @@ function toCsvCell(value: string): string {
   return value;
 }
 
+function dateInputToday(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function createDefaultNewPlant(): NewPlantForm {
+  const today = dateInputToday();
+  return {
+    name: '',
+    species: '',
+    container_type: 'Grow Bag',
+    pot_size: '10 gallon',
+    sun_exposure: 'full_sun',
+    watering_frequency_days: 3,
+    last_watered: today,
+    fertilizer_frequency_days: 30,
+    last_fertilized: today,
+    fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
+    fertilizer_notes: '',
+    location_in_garden: '',
+    photo_url: null,
+  };
+}
+
+const DESERT_PRESET_FILTERS = ['All', ...DESERT_PLANT_CATEGORIES] as const;
+type DesertPresetFilter = (typeof DESERT_PRESET_FILTERS)[number];
+
 export function GardenPageClient() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -77,6 +109,8 @@ export function GardenPageClient() {
   const [isFertilizerOpen, setIsFertilizerOpen] = useState(false);
   const [isGardenHeaderCollapsed, setIsGardenHeaderCollapsed] = useState(false);
   const [bulkWateringTodayBusy, setBulkWateringTodayBusy] = useState(false);
+  const [desertPresetSearch, setDesertPresetSearch] = useState('');
+  const [desertPresetFilter, setDesertPresetFilter] = useState<DesertPresetFilter>('All');
   const editPhotoBaselineRef = useRef<string | null>(null);
   const lastScrollYRef = useRef(0);
 
@@ -84,15 +118,7 @@ export function GardenPageClient() {
   const { activities, setActivities, fetchActivities } = useActivities();
   const { weather, loadWeather } = useWeather();
 
-  const [newPlant, setNewPlant] = useState<NewPlantForm>({
-    name: '', species: '', container_type: 'Grow Bag', pot_size: '10 gallon',
-    sun_exposure: 'full_sun',
-    watering_frequency_days: 3, last_watered: new Date().toISOString().split('T')[0],
-    fertilizer_frequency_days: 30, last_fertilized: new Date().toISOString().split('T')[0],
-    fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
-    fertilizer_notes: '',
-    location_in_garden: '', photo_url: null as string | null,
-  });
+  const [newPlant, setNewPlant] = useState<NewPlantForm>(createDefaultNewPlant);
   const [editWaterDays, setEditWaterDays] = useState('');
   const [editFertDays, setEditFertDays] = useState('');
   const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
@@ -277,6 +303,24 @@ export function GardenPageClient() {
     if (fertDueThisMonthOnly) list = list.filter((p) => needsFertilizerThisMonth(p));
     return list;
   }, [plants, plantSearchNorm, fertDueThisMonthOnly]);
+  const desertPresetSearchNorm = desertPresetSearch.trim().toLowerCase();
+  const filteredDesertPresets = useMemo(() => {
+    return desertPlantPresets.filter((preset) => {
+      if (desertPresetFilter !== 'All' && preset.category !== desertPresetFilter) return false;
+      if (!desertPresetSearchNorm) return true;
+      const searchable = [
+        preset.name,
+        preset.species,
+        preset.category,
+        preset.fertilizer_notes,
+        preset.location_in_garden,
+        preset.phoenix_notes,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return searchable.includes(desertPresetSearchNorm);
+    });
+  }, [desertPresetFilter, desertPresetSearchNorm]);
 
   const totalPlantCount = plants.length;
   const showRainyDayButton = useMemo(() => {
@@ -391,6 +435,29 @@ export function GardenPageClient() {
     }
   };
 
+  const applyDesertPlantPreset = (preset: DesertPlantPreset) => {
+    if (newPreviewUrl) {
+      URL.revokeObjectURL(newPreviewUrl);
+      setNewPreviewUrl(null);
+    }
+    setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
+    setNewPlant({
+      ...createDefaultNewPlant(),
+      name: preset.name,
+      species: preset.species,
+      container_type: preset.container_type,
+      pot_size: preset.pot_size,
+      sun_exposure: preset.sun_exposure,
+      watering_frequency_days: preset.watering_frequency_days,
+      fertilizer_frequency_days: preset.fertilizer_frequency_days,
+      fertilizer_seasons: [...preset.fertilizer_seasons],
+      fertilizer_notes: preset.fertilizer_notes,
+      location_in_garden: preset.location_in_garden,
+      photo_url: null,
+    });
+    toast.success(`${preset.name} preset loaded.`);
+  };
+
   const addPlant = async (e: React.FormEvent) => {
     if (isWriteDisabled) return;
     e.preventDefault();
@@ -436,21 +503,9 @@ export function GardenPageClient() {
     toast.success('Plant added successfully! 🌱');
     if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
     setIsAddModalOpen(false);
-    setNewPlant({
-      name: '',
-      species: '',
-      container_type: 'Grow Bag',
-      pot_size: '10 gallon',
-      sun_exposure: 'full_sun',
-      watering_frequency_days: 3,
-      fertilizer_frequency_days: 30,
-      last_watered: new Date().toISOString().split('T')[0],
-      last_fertilized: new Date().toISOString().split('T')[0],
-      fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
-      fertilizer_notes: '',
-      location_in_garden: '',
-      photo_url: null,
-    });
+    setNewPlant(createDefaultNewPlant());
+    setDesertPresetSearch('');
+    setDesertPresetFilter('All');
     setNewPreviewUrl(null);
     setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
     await fetchPlants();
@@ -682,6 +737,61 @@ export function GardenPageClient() {
                 <DialogTitle className="text-oasis">Add New Plant</DialogTitle>
               </DialogHeader>
               <form onSubmit={addPlant} className="space-y-5">
+                {/* Added: desert quick-add library (searchable, category-filtered). */}
+                <div className="space-y-3 rounded-2xl border border-desert-border bg-desert-parchment/70 p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm font-semibold text-oasis">Quick Add from Desert Library</Label>
+                    <Badge variant="outline" className="border-desert-border text-desert-sage">
+                      {filteredDesertPresets.length} matches
+                    </Badge>
+                  </div>
+                  <Input
+                    value={desertPresetSearch}
+                    onChange={(e) => setDesertPresetSearch(e.target.value)}
+                    placeholder="Search Phoenix-friendly plants..."
+                  />
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {DESERT_PRESET_FILTERS.map((category) => {
+                      const active = desertPresetFilter === category;
+                      return (
+                        <Button
+                          key={category}
+                          type="button"
+                          size="sm"
+                          variant={active ? 'secondary' : 'outline'}
+                          className={cn('whitespace-nowrap rounded-full', active && 'bg-oasis/10 text-oasis')}
+                          onClick={() => setDesertPresetFilter(category)}
+                        >
+                          {category}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                    {filteredDesertPresets.length > 0 ? (
+                      filteredDesertPresets.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => applyDesertPlantPreset(preset)}
+                          className="w-full rounded-xl border border-desert-border bg-white/70 p-3 text-left transition-colors hover:border-oasis/40 hover:bg-oasis/5 dark:bg-zinc-900/60"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium text-desert-ink dark:text-zinc-100">{preset.name}</p>
+                            <Badge variant="outline" className="border-desert-border text-desert-dust">
+                              {preset.category}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-desert-dust">{preset.phoenix_notes}</p>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-desert-border px-3 py-4 text-sm text-desert-sage">
+                        No presets match that search. Try another name or category.
+                      </p>
+                    )}
+                  </div>
+                </div>
                 <div>
                   <Label>Plant Name</Label>
                   <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
