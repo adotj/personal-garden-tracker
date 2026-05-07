@@ -111,6 +111,7 @@ export function GardenPageClient() {
   const [bulkWateringTodayBusy, setBulkWateringTodayBusy] = useState(false);
   const [desertPresetSearch, setDesertPresetSearch] = useState('');
   const [desertPresetFilter, setDesertPresetFilter] = useState<DesertPresetFilter>('All');
+  const [desertPresetLibraryOpen, setDesertPresetLibraryOpen] = useState(true);
   const editPhotoBaselineRef = useRef<string | null>(null);
   const lastScrollYRef = useRef(0);
 
@@ -726,77 +727,146 @@ export function GardenPageClient() {
         onToggleDarkMode={toggleDarkMode}
         onLogout={handleLogout}
         addPlantDialog={(
-          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+          <Dialog
+            open={isAddModalOpen}
+            onOpenChange={(open) => {
+              setIsAddModalOpen(open);
+              if (open) setDesertPresetLibraryOpen(true);
+            }}
+          >
             <DialogTrigger>
               <Button className="bg-oasis hover:bg-oasis-hover rounded-full" disabled={isDemoMode}>
                 <Plus className="h-4 w-4 mr-1" /> New Plant
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[min(90vh,720px)] overflow-y-auto sm:max-w-lg">
-              <DialogHeader>
+            <DialogContent
+              className={cn(
+                'max-h-[min(90dvh,720px)] w-full max-w-[min(32rem,calc(100vw-1rem))]',
+                'overflow-y-auto overflow-x-hidden overscroll-y-contain',
+                'p-3 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 sm:pb-4 sm:max-w-lg',
+              )}
+            >
+              <DialogHeader className="min-w-0 shrink-0 pr-8">
                 <DialogTitle className="text-oasis">Add New Plant</DialogTitle>
               </DialogHeader>
-              <form onSubmit={addPlant} className="space-y-5">
-                {/* Added: desert quick-add library (searchable, category-filtered). */}
-                <div className="space-y-3 rounded-2xl border border-desert-border bg-desert-parchment/70 p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-sm font-semibold text-oasis">Quick Add from Desert Library</Label>
-                    <Badge variant="outline" className="border-desert-border text-desert-sage">
-                      {filteredDesertPresets.length} matches
-                    </Badge>
-                  </div>
-                  <Input
-                    value={desertPresetSearch}
-                    onChange={(e) => setDesertPresetSearch(e.target.value)}
-                    placeholder="Search Phoenix-friendly plants..."
-                  />
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {DESERT_PRESET_FILTERS.map((category) => {
-                      const active = desertPresetFilter === category;
-                      return (
-                        <Button
-                          key={category}
-                          type="button"
-                          size="sm"
-                          variant={active ? 'secondary' : 'outline'}
-                          className={cn('whitespace-nowrap rounded-full', active && 'bg-oasis/10 text-oasis')}
-                          onClick={() => setDesertPresetFilter(category)}
-                        >
-                          {category}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                    {filteredDesertPresets.length > 0 ? (
-                      filteredDesertPresets.map((preset) => (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => applyDesertPlantPreset(preset)}
-                          className="w-full rounded-xl border border-desert-border bg-white/70 p-3 text-left transition-colors hover:border-oasis/40 hover:bg-oasis/5 dark:bg-zinc-900/60"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium text-desert-ink dark:text-zinc-100">{preset.name}</p>
-                            <Badge variant="outline" className="border-desert-border text-desert-dust">
-                              {preset.category}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 text-xs text-desert-dust">{preset.phoenix_notes}</p>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="rounded-xl border border-dashed border-desert-border px-3 py-4 text-sm text-desert-sage">
-                        No presets match that search. Try another name or category.
-                      </p>
-                    )}
-                  </div>
+              <form onSubmit={addPlant} className="min-w-0 space-y-4 sm:space-y-5">
+                {/* Desert quick-add: mobile-first — wrap tabs on phone, snap-scroll from md up. */}
+                <div className="min-w-0 overflow-hidden rounded-2xl border border-desert-border bg-desert-parchment/70 p-2.5 shadow-sm sm:p-4">
+                  <button
+                    type="button"
+                    onClick={() => setDesertPresetLibraryOpen((o) => !o)}
+                    className="flex w-full min-w-0 items-start gap-2 rounded-xl text-left outline-none transition-colors hover:bg-desert-parchment/80 focus-visible:ring-2 focus-visible:ring-oasis/25 -m-0.5 p-1.5 sm:-m-1 sm:p-1"
+                    aria-expanded={desertPresetLibraryOpen}
+                  >
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <span className="block text-xs font-semibold text-oasis sm:text-sm">
+                        Quick Add from Desert Library
+                      </span>
+                      {!desertPresetLibraryOpen ? (
+                        <span className="block text-[11px] leading-snug text-desert-sage sm:text-xs">
+                          {filteredDesertPresets.length} preset{filteredDesertPresets.length === 1 ? '' : 's'} — tap to
+                          expand
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                      <Badge variant="outline" className="border-desert-border text-[10px] text-desert-sage sm:text-xs">
+                        {filteredDesertPresets.length} matches
+                      </Badge>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 shrink-0 text-desert-dust transition-transform',
+                          desertPresetLibraryOpen && 'rotate-180',
+                        )}
+                        aria-hidden
+                      />
+                    </div>
+                  </button>
+                  {desertPresetLibraryOpen ? (
+                    <div className="mt-2 min-w-0 space-y-2 sm:mt-3 sm:space-y-3">
+                      <Input
+                        value={desertPresetSearch}
+                        onChange={(e) => setDesertPresetSearch(e.target.value)}
+                        placeholder="Search Phoenix-friendly plants..."
+                        className="h-9 w-full min-w-0 px-3 text-sm sm:h-10"
+                      />
+                      <div
+                        className={cn(
+                          'flex gap-1.5 sm:gap-2',
+                          'flex-wrap',
+                          'md:flex-nowrap md:overflow-x-auto md:overflow-y-hidden md:snap-x md:snap-mandatory md:pb-1.5',
+                          'md:-mx-1 md:scroll-pl-1 md:scroll-pr-1 md:px-1',
+                          '[scrollbar-width:thin] md:[-webkit-overflow-scrolling:touch]',
+                        )}
+                      >
+                        {DESERT_PRESET_FILTERS.map((category) => {
+                          const active = desertPresetFilter === category;
+                          return (
+                            <Button
+                              key={category}
+                              type="button"
+                              size="sm"
+                              variant={active ? 'secondary' : 'outline'}
+                              className={cn(
+                                'h-auto min-h-8 shrink-0 rounded-full px-2.5 py-1.5 text-center text-xs sm:min-h-9 sm:px-3 sm:text-sm',
+                                'whitespace-normal sm:whitespace-nowrap',
+                                'md:snap-start',
+                                active && 'bg-oasis/10 text-oasis',
+                              )}
+                              onClick={() => setDesertPresetFilter(category)}
+                            >
+                              {category}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <div
+                        className={cn(
+                          'max-h-[11rem] min-h-0 space-y-1.5 overflow-y-auto overflow-x-hidden sm:max-h-56 sm:space-y-2',
+                          'pr-0.5 [-webkit-overflow-scrolling:touch]',
+                        )}
+                      >
+                        {filteredDesertPresets.length > 0 ? (
+                          filteredDesertPresets.map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => applyDesertPlantPreset(preset)}
+                              className="w-full min-w-0 rounded-xl border border-desert-border bg-white/70 p-2 text-left transition-colors hover:border-oasis/40 hover:bg-oasis/5 dark:bg-zinc-900/60 sm:p-3"
+                            >
+                              <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+                                <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-desert-ink line-clamp-2 dark:text-zinc-100 sm:text-base sm:line-clamp-none">
+                                  {preset.name}
+                                </p>
+                                <Badge
+                                  variant="outline"
+                                  className="w-fit shrink-0 border-desert-border text-[10px] text-desert-dust sm:text-xs"
+                                >
+                                  {preset.category}
+                                </Badge>
+                              </div>
+                              <p
+                                className="mt-1 text-[11px] leading-snug text-desert-dust line-clamp-2 sm:text-xs"
+                                title={preset.phoenix_notes}
+                              >
+                                {preset.phoenix_notes}
+                              </p>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="rounded-xl border border-dashed border-desert-border px-2.5 py-3 text-xs text-desert-sage sm:px-3 sm:py-4 sm:text-sm">
+                            No presets match that search. Try another name or category.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div>
                   <Label>Plant Name</Label>
                   <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <Label>Container Type</Label>
                     <Select value={newPlant.container_type} onValueChange={(v) => handleContainerTypeChange(v)}>
@@ -846,7 +916,7 @@ export function GardenPageClient() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <Label>Water every (days)</Label>
                     <Input
@@ -884,7 +954,7 @@ export function GardenPageClient() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
                     <Label>Last watered</Label>
                     <Input
