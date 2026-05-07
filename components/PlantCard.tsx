@@ -142,7 +142,7 @@ export function PlantCard({
             size="sm"
             onClick={() => onMarkFertilized(plant.id, plant.name)}
             disabled={isDemoMode || isPlantCareDateToday(plant.last_fertilized)}
-            className="h-7 flex-1 rounded-full px-2 text-xs bg-amber-600 text-white hover:bg-amber-700"
+            className="h-7 flex-1 rounded-full px-2 text-xs bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400 disabled:opacity-100 disabled:bg-amber-700/90 disabled:text-amber-50 dark:disabled:bg-amber-500/65 dark:disabled:text-amber-50"
           >
             <Sprout className="mr-1 h-3.5 w-3.5" />
             Fert

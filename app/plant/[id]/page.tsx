@@ -1571,7 +1571,7 @@ export default function PlantProfile() {
               </Button>
               <Button
                 type="button"
-                className="rounded-full bg-amber-600 hover:bg-amber-700 text-white"
+                className="rounded-full bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400 disabled:opacity-100 disabled:bg-amber-700/90 disabled:text-amber-50 dark:disabled:bg-amber-500/65 dark:disabled:text-amber-50"
                 disabled={isWriteDisabled || careBusy !== null || fertilizedToday}
                 onClick={() => void markFertilizedFromProfile()}
               >
