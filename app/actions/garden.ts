@@ -22,6 +22,8 @@ import { sunExposureLabel } from '@/lib/plant-types';
 import { datetimeLocalToIsoUtc } from '@/lib/photo-timeline';
 import { format, isValid, parseISO } from 'date-fns';
 
+type SupabaseServerClient = ReturnType<typeof createSupabaseServerClient>;
+
 function getWeatherCondition(code: number): string {
   if (code === 0) return 'Sunny';
   if (code <= 3) return 'Cloudy';
@@ -40,9 +42,33 @@ function getWeatherIcon(code: number): string {
   return '☁️';
 }
 
-async function logActivity(action: string, plant_name?: string, details?: string | null) {
+async function logActivity(action: string, plant_name?: string, details?: string | null, created_at?: string) {
   const supabase = createSupabaseServerClient();
-  await supabase.from('activity_logs').insert([{ action, plant_name, details: details ?? null }]);
+  const row: { action: string; plant_name?: string; details: string | null; created_at?: string } = {
+    action,
+    details: details ?? null,
+  };
+  if (plant_name?.trim()) row.plant_name = plant_name;
+  if (created_at) row.created_at = created_at;
+  await supabase.from('activity_logs').insert([row]);
+}
+
+function plantWateredDetails(when: string) {
+  return `Last watered on this plant’s record is now ${formatPlantCareInstant(when, 'profile')}.`;
+}
+
+async function logPlantWateredActivities(supabase: SupabaseServerClient, plantNames: string[], when: string) {
+  const rows = plantNames
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0)
+    .map((name) => ({
+      action: 'Plant Watered',
+      plant_name: name,
+      details: plantWateredDetails(when),
+      created_at: when,
+    }));
+  if (rows.length === 0) return;
+  await supabase.from('activity_logs').insert(rows);
 }
 
 function toStoragePath(photoUrl: string): string | null {
@@ -252,11 +278,7 @@ export async function markWateredAction(id: string): Promise<ActionResult<{ alre
     const when = wateringLoggedAtIso();
     const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', id);
     if (error) return { ok: false, error: error.message || 'Could not mark watered' };
-    await logActivity(
-      'Plant Watered',
-      plant.name,
-      `Last watered on this plant’s record is now ${formatPlantCareInstant(when, 'profile')}.`,
-    );
+    await logPlantWateredActivities(supabase, [plant.name], when);
     return { ok: true, data: { alreadyToday: false, when, name: plant.name } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not mark watered' };
@@ -273,22 +295,27 @@ export async function markSelectedTodayPlantsWateredAction(
     const supabase = createSupabaseServerClient();
     const { data: rows, error: rowsErr } = await supabase
       .from('plants')
-      .select('id, last_watered')
+      .select('id, name, last_watered')
       .in('id', uniqueIds);
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load selected plants' };
-    const pendingIds = rows
-      .filter((row) => !isPlantCareDateToday(row.last_watered))
-      .map((row) => row.id as string);
+    const pendingRows = rows.filter((row) => !isPlantCareDateToday(row.last_watered));
+    const pendingIds = pendingRows.map((row) => row.id as string);
     if (pendingIds.length === 0) return { ok: false, error: 'Selected plants are already marked watered today.' };
 
     const when = wateringLoggedAtIso();
     const { error } = await supabase.from('plants').update({ last_watered: when }).in('id', pendingIds);
     if (error) return { ok: false, error: error.message || 'Could not mark selected plants watered' };
 
+    await logPlantWateredActivities(
+      supabase,
+      pendingRows.map((row) => (typeof row.name === 'string' ? row.name : '')),
+      when,
+    );
     await logActivity(
       'Plant Watered',
       undefined,
       `Bulk watered ${pendingIds.length} plant${pendingIds.length === 1 ? '' : 's'}. Last watered is now ${formatPlantCareInstant(when, 'profile')}.`,
+      when,
     );
     return { ok: true, data: { updatedIds: pendingIds, when } };
   } catch (error) {
