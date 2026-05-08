@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS } from '@/lib/plant-types';
 import {
@@ -23,7 +25,6 @@ import {
   defaultPhotoTimelineFromFile,
   toDatetimeLocalValue,
 } from '@/lib/photo-timeline';
-import { GARDEN_AUTH_KEY, GARDEN_MODE_KEY } from '@/lib/garden-session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, AlertTriangle, Image as ImageIcon, Loader2, X, Sprout, ChevronDown, Lock } from 'lucide-react';
+import { Plus, Image as ImageIcon, Loader2, X, Sprout, ChevronDown, Lock } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast, Toaster } from 'sonner';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
@@ -60,9 +61,6 @@ import { GardenHeader, GardenWeather } from '@/components/GardenHeader';
 import { PlantGrid } from '@/components/PlantGrid';
 import { ActivityLog } from '@/components/ActivityLog';
 import { PushNotificationCard } from '@/components/PushNotificationCard';
-
-const DEMO_PASSWORD = 'demo';
-const REAL_PASSWORD = process.env.NEXT_PUBLIC_SHARED_PASSWORD || 'changeme';
 
 function toCsvCell(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
@@ -96,9 +94,9 @@ const DESERT_PRESET_FILTERS = ['All', ...DESERT_PLANT_CATEGORIES] as const;
 type DesertPresetFilter = (typeof DESERT_PRESET_FILTERS)[number];
 
 export function GardenPageClient() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const [enteredPassword, setEnteredPassword] = useState('');
+  const [session, setSession] = useState<Session | null>(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -129,55 +127,8 @@ export function GardenPageClient() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
-
-  const loadDemoPlants = useCallback(() => {
-    const demoPlants: Plant[] = [
-      {
-        id: 'demo1',
-        name: 'Demo Desert Rose',
-        container_type: 'Pot',
-        pot_size: '10gal',
-        watering_frequency_days: 7,
-        last_watered: '2026-04-01',
-        fertilizer_frequency_days: 30,
-        last_fertilized: '2026-03-15',
-        fertilizer_seasons: ['spring', 'summer'],
-        fertilizer_notes: 'Bloom booster in spring',
-        sun_exposure: 'full_sun',
-        photo_url: null,
-      },
-      {
-        id: 'demo2',
-        name: 'Demo Saguaro',
-        container_type: 'Grow Bag',
-        pot_size: '10 gallon',
-        watering_frequency_days: 14,
-        last_watered: '2026-03-25',
-        fertilizer_frequency_days: 60,
-        last_fertilized: '2026-02-01',
-        fertilizer_seasons: ['summer'],
-        fertilizer_notes: 'Light feed; dormant in winter',
-        sun_exposure: 'partial_sun',
-        photo_url: null,
-      },
-      {
-        id: 'demo3',
-        name: 'Demo Prickly Pear',
-        container_type: 'Raised Bed',
-        pot_size: 'Large',
-        watering_frequency_days: 10,
-        last_watered: '2026-04-03',
-        fertilizer_frequency_days: 45,
-        last_fertilized: '2026-03-20',
-        fertilizer_seasons: [...ALL_FERTILIZER_SEASONS],
-        fertilizer_notes: null,
-        sun_exposure: 'partial_shade',
-        photo_url: null,
-      },
-    ];
-    setPlants(demoPlants);
-    setActivities([]);
-  }, [setActivities, setPlants]);
+  const isAuthenticated = !!session;
+  const isDemoMode = false;
 
   const loadGardenData = useCallback(async () => {
     const [plantsResult, activityResult, weatherResult] = await Promise.all([
@@ -200,18 +151,35 @@ export function GardenPageClient() {
     const savedDark = localStorage.getItem('darkMode') === 'true';
     setDarkMode(savedDark);
     if (savedDark) document.documentElement.classList.add('dark');
+  }, []);
 
-    if (localStorage.getItem(GARDEN_AUTH_KEY) === 'true') {
-      setIsAuthenticated(true);
-      if (localStorage.getItem(GARDEN_MODE_KEY) === 'demo') {
-        setIsDemoMode(true);
-        loadDemoPlants();
-      } else {
-        setIsDemoMode(false);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSession = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('getSession failed:', error);
       }
-    }
-    setLoading(false);
-  }, [loadDemoPlants]);
+      if (!isMounted) return;
+      setSession(data.session ?? null);
+      setLoading(false);
+    };
+
+    void loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const toggleDarkMode = () => {
     const newMode = !darkMode;
@@ -220,41 +188,46 @@ export function GardenPageClient() {
     newMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handleMagicLinkSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredPassword === DEMO_PASSWORD) {
-      setIsAuthenticated(true);
-      setIsDemoMode(true);
-      localStorage.setItem(GARDEN_AUTH_KEY, 'true');
-      localStorage.setItem(GARDEN_MODE_KEY, 'demo');
-      toast.success('Demo Mode Activated');
-      loadDemoPlants();
-    } else if (enteredPassword === REAL_PASSWORD) {
-      setIsAuthenticated(true);
-      setIsDemoMode(false);
-      localStorage.setItem(GARDEN_AUTH_KEY, 'true');
-      localStorage.setItem(GARDEN_MODE_KEY, 'real');
-      toast.success('Welcome to your real garden 🌵');
-      void loadGardenData();
-    } else {
-      toast.error('Incorrect password');
-      setEnteredPassword('');
+    const email = authEmail.trim();
+    if (!email) return;
+
+    setIsSendingMagicLink(true);
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: redirectTo,
+      },
+    });
+    setIsSendingMagicLink(false);
+
+    if (error) {
+      toast.error(error.message || 'Could not send sign-in link');
+      return;
     }
+
+    toast.success('Magic link sent. Check your email to enter the garden.');
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setIsDemoMode(false);
-    localStorage.removeItem(GARDEN_AUTH_KEY);
-    localStorage.removeItem(GARDEN_MODE_KEY);
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      toast.error(error.message || 'Could not log out');
+      return;
+    }
     toast.info('Logged out');
   };
 
   useEffect(() => {
-    if (isAuthenticated && !isDemoMode) {
-      void loadGardenData();
+    if (!isAuthenticated) {
+      setPlants([]);
+      setActivities([]);
+      return;
     }
-  }, [isAuthenticated, isDemoMode, loadGardenData]);
+    void loadGardenData();
+  }, [isAuthenticated, loadGardenData, setActivities, setPlants]);
 
   useEffect(() => {
     if (!isAuthenticated || loading) {
@@ -284,18 +257,14 @@ export function GardenPageClient() {
   }, [isAuthenticated, loading]);
 
   const refreshGarden = useCallback(async () => {
-    if (isDemoMode) {
-      loadDemoPlants();
-      return;
-    }
     await loadGardenData();
-  }, [isDemoMode, loadDemoPlants, loadGardenData]);
+  }, [loadGardenData]);
 
   const { pullDistance, isRefreshing, threshold } = usePullToRefresh(refreshGarden, {
     disabled: !isAuthenticated || loading,
   });
 
-  const isWriteDisabled = isDemoMode;
+  const isWriteDisabled = false;
 
   const plantSearchNorm = plantSearch.trim().toLowerCase();
   const filteredPlants = useMemo(() => {
@@ -670,12 +639,30 @@ export function GardenPageClient() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-desert-page flex items-center justify-center p-6">
+        <Toaster position="top-center" richColors />
         <div className="max-w-md w-full bg-desert-parchment rounded-3xl shadow-xl shadow-desert-border/20 p-10 ring-1 ring-desert-border/30">
           <div className="flex justify-center mb-6"><Lock className="h-12 w-12 text-oasis" /></div>
           <h1 className="text-4xl font-bold text-center text-oasis mb-2">Laveen Garden</h1>
-          <form onSubmit={handlePasswordSubmit} className="space-y-6">
-            <Input type="password" value={enteredPassword} onChange={(e) => setEnteredPassword(e.target.value)} placeholder="demo (demo mode)" required className="text-lg py-6" />
-            <Button type="submit" className="w-full bg-oasis hover:bg-oasis-hover py-6 text-lg rounded-full">Enter Garden</Button>
+          <p className="mb-6 text-center text-sm text-desert-sage">
+            Sign in with your email to receive a magic link.
+          </p>
+          <form onSubmit={handleMagicLinkSignIn} className="space-y-6">
+            <Input
+              type="email"
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+              className="text-lg py-6"
+            />
+            <Button
+              type="submit"
+              disabled={isSendingMagicLink}
+              className="w-full bg-oasis hover:bg-oasis-hover py-6 text-lg rounded-full"
+            >
+              {isSendingMagicLink ? 'Sending link...' : 'Send Magic Link'}
+            </Button>
           </form>
         </div>
       </div>
@@ -706,12 +693,6 @@ export function GardenPageClient() {
         </div>
       )}
 
-      {isDemoMode && (
-        <div className="bg-amber-950/90 text-amber-100 py-3 px-6 flex items-center justify-center gap-2 font-medium border-b border-amber-900/50">
-          <AlertTriangle className="h-5 w-5" /> DEMO MODE — All changes are temporary
-        </div>
-      )}
-
       <GardenHeader
         darkMode={darkMode}
         isDemoMode={isDemoMode}
@@ -725,7 +706,7 @@ export function GardenPageClient() {
         onPlantSearchChange={setPlantSearch}
         onClearPlantSearch={() => setPlantSearch('')}
         onToggleDarkMode={toggleDarkMode}
-        onLogout={handleLogout}
+        onLogout={() => void handleLogout()}
         addPlantDialog={(
           <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
             <DialogTrigger>
@@ -1079,8 +1060,7 @@ export function GardenPageClient() {
           <Card className="mb-16 rounded-3xl border border-desert-border bg-desert-parchment">
             <CardContent className="py-16 text-center">
               <p className="text-lg text-desert-sage">
-                No plants yet. Add your first plant with <span className="font-medium text-oasis">New Plant</span>
-                {isDemoMode ? ' (disabled in demo).' : '.'}
+                No plants yet. Add your first plant with <span className="font-medium text-oasis">New Plant</span>.
               </p>
             </CardContent>
           </Card>

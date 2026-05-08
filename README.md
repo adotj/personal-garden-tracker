@@ -2,8 +2,7 @@
 
 A full-stack web app to track plants, watering schedules, photos, and activity in my desert garden (Laveen, AZ).
 
-**Live Demo:** [https://laveen-garden-tracker.vercel.app](https://laveen-garden-tracker.vercel.app)  
-**Demo Password:** `demo` (safe read-only mode — no changes will be saved)
+**Live Demo:** [https://laveen-garden-tracker.vercel.app](https://laveen-garden-tracker.vercel.app)
 
 **Tech Stack:** Next.js 16 (App Router), TypeScript, Supabase (PostgreSQL + Storage), Tailwind CSS, shadcn/ui
 
@@ -14,13 +13,13 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - PWA push notifications (Phase 1): enable per device and send test notifications
 - Full activity log showing who did what and when
 - Dark mode toggle
-- Separate demo mode for safe public viewing
+- Supabase email magic-link authentication
 
 ### What I Learned
 - Building and deploying a full-stack Next.js application from scratch
 - Working with Supabase for database management, file storage, and Row Level Security
 - Handling file uploads and automatic photo cleanup
-- Implementing secure shared password protection using environment variables (instead of hardcoding credentials)
+- Implementing Supabase Auth with email magic-link sign-in
 - Using `git-filter-repo` to rewrite Git history and completely remove exposed credentials from all previous commits
 - Responsive design and modern UI development with Tailwind CSS and shadcn/ui
 - Git workflow, Vercel deployment, and proper management of secrets
@@ -32,7 +31,6 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Building logic that adapts watering schedules based on real-time weather in extreme desert heat
 
 ### Future Improvements
-- Replace shared password with full Supabase Auth (individual user accounts)
 - Add plant search, filtering, and sorting
 - Watering history charts and analytics
 - Scheduled/automated reminder campaigns (beyond manual test send)

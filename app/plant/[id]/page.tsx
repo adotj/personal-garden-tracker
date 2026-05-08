@@ -27,7 +27,6 @@ import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckbo
 import { deletePlantImageFromStorage, uploadPlantImage } from '@/lib/storage-upload';
 import { datetimeLocalToIsoUtc, defaultPhotoTimelineFromFile, toDatetimeLocalValue } from '@/lib/photo-timeline';
 import { buildPlantTroubleshootingPrompt } from '@/lib/plant-ai-prompt';
-import { getGardenMode } from '@/lib/garden-session';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -213,7 +212,7 @@ export default function PlantProfile() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [careBusy, setCareBusy] = useState<'water' | 'fert' | null>(null);
-  const [isWriteDisabled, setIsWriteDisabled] = useState(false);
+  const isWriteDisabled = false;
   const [fertilizerLogs, setFertilizerLogs] = useState<FertilizerLogRow[]>([]);
   const [fertDraft, setFertDraft] = useState<{ seasons: FertilizerSeason[]; notes: string }>({
     seasons: [...ALL_FERTILIZER_SEASONS],
@@ -252,10 +251,6 @@ export default function PlantProfile() {
   const timelineCameraInputRef = useRef<HTMLInputElement>(null);
   const slideshowTouchStartXRef = useRef<number | null>(null);
   const slideshowTouchStartYRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    setIsWriteDisabled(getGardenMode() === 'demo');
-  }, []);
 
   useEffect(() => {
     plantRef.current = plant;
@@ -1620,9 +1615,6 @@ export default function PlantProfile() {
                 )}
                 Fertilized today
               </Button>
-              {isWriteDisabled ? (
-                <p className="w-full text-xs text-amber-700 dark:text-amber-400">Demo mode — care actions are disabled.</p>
-              ) : null}
             </div>
             <div className="space-y-3 rounded-2xl border border-desert-mist/70 bg-white/60 p-4 dark:border-zinc-600 dark:bg-zinc-800/80">
               <p className="text-sm font-medium text-desert-ink dark:text-zinc-100">Adjust watering schedule</p>
@@ -1764,9 +1756,6 @@ export default function PlantProfile() {
               )}
             </div>
 
-            {isWriteDisabled ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">Demo mode — journal is read-only.</p>
-            ) : null}
           </CardContent>
         </Card>
 
@@ -1811,9 +1800,6 @@ export default function PlantProfile() {
               {fertSettingsBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save fertilizer settings
             </Button>
-            {isWriteDisabled ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">Demo mode — editing is disabled.</p>
-            ) : null}
           </CardContent>
         </Card>
 
