@@ -329,7 +329,8 @@ export async function markWateredAction(
       .from('plants')
       .select('id, name, last_watered')
       .eq('id', id)
-      .single();
+      .limit(1)
+      .maybeSingle();
     if (plantErr || !plant) {
       return { ok: false, error: plantErr?.message || 'Plant not found' };
     }
