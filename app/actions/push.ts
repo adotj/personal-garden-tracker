@@ -54,7 +54,7 @@ export async function savePushSubscriptionAction(
     const subscription = parseSubscription(input.subscription);
     if (!subscription) return { ok: false, error: 'Invalid subscription payload.' };
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: existingRows, error: existingError } = await supabase
       .from('push_subscriptions')
       .select('id, subscription')
@@ -98,7 +98,7 @@ export async function sendTestPushNotificationAction(
     const sessionId = normalizeSessionId(input.sessionId);
     if (!sessionId) return { ok: false, error: 'Missing local session id.' };
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: row, error: fetchError } = await supabase
       .from('push_subscriptions')
       .select('id, subscription')

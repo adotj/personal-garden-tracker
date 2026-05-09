@@ -22,7 +22,7 @@ import { sunExposureLabel } from '@/lib/plant-types';
 import { datetimeLocalToIsoUtc } from '@/lib/photo-timeline';
 import { format, isValid, parseISO } from 'date-fns';
 
-type SupabaseServerClient = ReturnType<typeof createSupabaseServerClient>;
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 type ClientCareDay = {
   todayDateKey: string;
   startIso: string;
@@ -83,7 +83,7 @@ function getWeatherIcon(code: number): string {
 }
 
 async function logActivity(action: string, plant_name?: string, details?: string | null, created_at?: string) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const row: { action: string; plant_name?: string; details: string | null; created_at?: string } = {
     action,
     details: details ?? null,
@@ -120,7 +120,7 @@ function toStoragePath(photoUrl: string): string | null {
 
 export async function fetchPlantsAction(): Promise<ActionResult<Plant[]>> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.from('plants').select('*').order('created_at', { ascending: false });
     if (error) return { ok: false, error: error.message || 'Could not load plants' };
     return { ok: true, data: (data || []).map((row) => normalizePlantRow(row as Plant)) };
@@ -131,7 +131,7 @@ export async function fetchPlantsAction(): Promise<ActionResult<Plant[]>> {
 
 export async function fetchActivitiesAction(): Promise<ActionResult<Activity[]>> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase
       .from('activity_logs')
       .select('*')
@@ -183,7 +183,7 @@ export async function fetchWeatherAction(): Promise<ActionResult<GardenWeather |
 
 export async function addPlantAction(input: AddPlantInput): Promise<ActionResult<{ id: string }>> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const seasons =
       input.plant.fertilizer_seasons?.length > 0
         ? input.plant.fertilizer_seasons
@@ -252,7 +252,7 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
 
 export async function updatePlantAction(input: UpdatePlantInput): Promise<ActionResult<{ id: string }>> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const merged = {
       ...input.plant,
       watering_frequency_days: Math.max(1, input.plant.watering_frequency_days),
@@ -307,7 +307,7 @@ export async function markWateredAction(
 ): Promise<ActionResult<{ alreadyToday: boolean; when: string; name: string }>> {
   try {
     const parsedClientCareDay = parseClientCareDay(clientCareDay);
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
       .select('id, name, last_watered')
@@ -338,7 +338,7 @@ export async function markSelectedTodayPlantsWateredAction(
     const uniqueIds = Array.from(new Set(plantIds));
     if (uniqueIds.length === 0) return { ok: false, error: 'Select at least one plant due today.' };
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: rows, error: rowsErr } = await supabase
       .from('plants')
       .select('id, name, last_watered')
@@ -376,7 +376,7 @@ export async function markAllWateredTodayAction(
 ): Promise<ActionResult<{ when: string; total: number }>> {
   try {
     const parsedClientCareDay = parseClientCareDay(clientCareDay);
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: rows, error: rowsErr } = await supabase.from('plants').select('id, last_watered');
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load plants' };
     if (rows.length === 0) return { ok: false, error: 'No plants to update yet.' };
@@ -400,7 +400,7 @@ export async function markFertilizedAction(
   id: string,
 ): Promise<ActionResult<{ alreadyToday: boolean; fertilizedDate: string; name: string }>> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
       .select('id, name, last_fertilized')
@@ -458,7 +458,7 @@ export async function markFertilizedAction(
 
 export async function deletePlantAction(id: string): Promise<ActionResult<{ name: string; deletedImages: number }>> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
       .select('id, name, photo_url')
@@ -501,7 +501,7 @@ export async function deletePlantAction(id: string): Promise<ActionResult<{ name
 
 export async function clearActivityLogAction(): Promise<ActionResult<null>> {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { error } = await supabase
       .from('activity_logs')
       .delete()
