@@ -53,7 +53,6 @@ import {
   deletePlantAction,
   markAllWateredTodayAction,
   markFertilizedAction,
-  markWateredAction,
   updatePlantAction,
 } from '@/app/actions/garden';
 import { markPlantWateredWithLog } from '@/lib/plant-care-log';
@@ -551,18 +550,28 @@ export function GardenPageClient() {
 
   const markWatered = async (id: string, name: string) => {
     if (isWriteDisabled) return;
-    const result = await markWateredAction(id, currentClientCareDay());
+    const plant = plants.find((p) => p.id === id);
+    if (!plant) {
+      toast.error('Plant not found');
+      return;
+    }
+    const result = await markPlantWateredWithLog({
+      supabase,
+      plantId: id,
+      plantName: plant.name,
+      lastWatered: plant.last_watered,
+    });
     if (!result.ok) {
       toast.error(result.error || 'Could not mark watered');
       return;
     }
-    if (result.data.alreadyToday) {
+    if (result.alreadyToday) {
       toast.info(`${name} is already marked as watered today.`);
       return;
     }
     toast.success(`✅ ${name} marked watered`);
     setPlants((prev) =>
-      prev.map((plant) => (plant.id === id ? { ...plant, last_watered: result.data.when } : plant)),
+      prev.map((plant) => (plant.id === id ? { ...plant, last_watered: result.when } : plant)),
     );
     await fetchActivities();
   };
