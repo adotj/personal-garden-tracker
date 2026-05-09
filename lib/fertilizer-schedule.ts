@@ -15,6 +15,18 @@ export const ALL_FERTILIZER_SEASONS: FertilizerSeason[] = [...FERTILIZER_SEASON_
 
 const SEASON_SET = new Set<string>(FERTILIZER_SEASON_ORDER);
 
+/**
+ * Fertilizer interval in days.
+ * `0` means "as needed / no recurring schedule".
+ */
+export function normalizeFertilizerFrequencyDays(raw: unknown, fallback = 30): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return fallback;
+  const wholeDays = Math.trunc(parsed);
+  if (wholeDays < 0) return 0;
+  return wholeDays;
+}
+
 export function normalizeFertilizerSeasons(raw: unknown): FertilizerSeason[] {
   let arr: string[] = [];
   if (raw == null) return [...ALL_FERTILIZER_SEASONS];
@@ -67,7 +79,8 @@ export function snapToAllowedFertilizerDay(from: Date, seasons: FertilizerSeason
 export function computeNextFertilizationDue(plant: Plant, now: Date = new Date()): Date | null {
   const seasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
   if (seasons.length === 0) return null;
-  const freq = Math.max(1, plant.fertilizer_frequency_days || 30);
+  const freq = normalizeFertilizerFrequencyDays(plant.fertilizer_frequency_days, 30);
+  if (freq === 0) return null;
   const today = startOfDay(now);
   let candidate: Date;
   if (plant.last_fertilized) {
@@ -92,6 +105,8 @@ export function formatNextFertilizationDue(plant: Plant, now = new Date()): stri
 export type FertilizerUrgency = 'overdue' | 'due_soon' | 'due_month' | 'later' | 'off_season';
 
 export function fertilizerUrgency(plant: Plant, now: Date = new Date()): FertilizerUrgency {
+  const freq = normalizeFertilizerFrequencyDays(plant.fertilizer_frequency_days, 30);
+  if (freq === 0) return 'later';
   const seasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
   if (!dateInFertilizerSeasons(now, seasons)) return 'off_season';
   const next = computeNextFertilizationDue(plant, now);
@@ -107,6 +122,8 @@ export function fertilizerUrgency(plant: Plant, now: Date = new Date()): Fertili
 
 /** Home filter: in-season plant with next due in this calendar month or already overdue while in-season */
 export function needsFertilizerThisMonth(plant: Plant, now: Date = new Date()): boolean {
+  const freq = normalizeFertilizerFrequencyDays(plant.fertilizer_frequency_days, 30);
+  if (freq === 0) return false;
   const seasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
   if (!dateInFertilizerSeasons(now, seasons)) return false;
   const next = computeNextFertilizationDue(plant, now);

@@ -26,6 +26,8 @@ function activityPrimaryLine(log: Activity): string {
       return quoted ? `Watered ${quoted}` : 'Plant watered';
     case 'Plant Fertilized':
       return quoted ? `Fertilized ${quoted}` : 'Plant fertilized';
+    case 'Fertilizer Schedule Updated':
+      return quoted ? `Updated fertilizer schedule for ${quoted}` : 'Fertilizer schedule updated';
     case 'Plant Added':
       return quoted ? `Added ${quoted} to the garden` : 'Plant added';
     case 'Plant Edited':

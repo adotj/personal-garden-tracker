@@ -5,6 +5,7 @@ import { formatPlantCareInstant } from '@/lib/plant-helpers';
 import {
   fertilizerUrgency,
   formatNextFertilizationDue,
+  normalizeFertilizerFrequencyDays,
   normalizeFertilizerSeasons,
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
@@ -65,7 +66,12 @@ export function buildPlantTroubleshootingPrompt(
   lines.push('');
   lines.push('## Fertilizing');
   const seasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
-  lines.push(`- **Interval during active seasons:** every ${plant.fertilizer_frequency_days} day(s)`);
+  const fertilizerFrequencyDays = normalizeFertilizerFrequencyDays(plant.fertilizer_frequency_days, 30);
+  lines.push(
+    fertilizerFrequencyDays === 0
+      ? '- **Interval during active seasons:** as needed (no recurring schedule)'
+      : `- **Interval during active seasons:** every ${fertilizerFrequencyDays} day(s)`,
+  );
   lines.push(`- **Fertilizer seasons (Northern Hemisphere calendar):** ${seasons.map(seasonLabel).join(', ')}`);
   lines.push(`- **Last fertilized (recorded):** ${fmtDay(plant.last_fertilized)}`);
   lines.push(`- **App-estimated next fertilize (season-aware):** ${formatNextFertilizationDue(plant)}`);

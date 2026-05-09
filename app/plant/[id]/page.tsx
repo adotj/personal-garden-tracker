@@ -20,6 +20,7 @@ import {
   ALL_FERTILIZER_SEASONS,
   fertilizerUrgency,
   formatNextFertilizationDue,
+  normalizeFertilizerFrequencyDays,
   normalizeFertilizerSeasons,
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
@@ -93,6 +94,10 @@ function isFertLogAction(action: string) {
   return action.toLowerCase().includes('fertiliz');
 }
 
+function isFertilizerScheduleLogAction(action: string) {
+  return action.toLowerCase().includes('fertilizer schedule');
+}
+
 function waterDueDate(iso: string | null, freqDays: number): Date | null {
   if (!iso || freqDays < 1) return null;
   const last = new Date(iso);
@@ -104,6 +109,13 @@ function waterDueDate(iso: string | null, freqDays: number): Date | null {
 function formatDueLine(due: Date | null): string {
   if (!due || !isValid(due)) return '';
   return `Next due ~ ${format(due, 'MMM d, yyyy')}`;
+}
+
+function fertilizerCadenceSentence(frequencyDays: number): string {
+  if (frequencyDays === 0) {
+    return 'Fertilizer cadence is set to as needed (no recurring interval).';
+  }
+  return `Fertilizer cadence is every ${frequencyDays} day${frequencyDays === 1 ? '' : 's'} during active seasons.`;
 }
 
 type HeaderPotOption = {
@@ -219,6 +231,11 @@ export default function PlantProfile() {
     notes: '',
   });
   const [fertSettingsBusy, setFertSettingsBusy] = useState(false);
+  const [fertScheduleDraft, setFertScheduleDraft] = useState<{ frequencyDays: string; lastFertilized: string }>({
+    frequencyDays: '30',
+    lastFertilized: '',
+  });
+  const [fertScheduleBusy, setFertScheduleBusy] = useState(false);
   const [wateringDraft, setWateringDraft] = useState<{ frequencyDays: string; lastWatered: string }>({
     frequencyDays: '',
     lastWatered: '',
@@ -552,8 +569,14 @@ export default function PlantProfile() {
     setPlantNoteEntries((data || []) as PlantNoteEntry[]);
   }, [plantId]);
 
-  const logActivityDb = async (action: string, plantName: string) => {
-    await supabase.from('activity_logs').insert([{ action, plant_name: plantName }]);
+  const logActivityDb = async (action: string, plantName: string, details?: string | null) => {
+    await supabase.from('activity_logs').insert([
+      {
+        action,
+        plant_name: plantName,
+        details: details ?? null,
+      },
+    ]);
   };
 
   const markWateredFromProfile = async () => {
@@ -605,6 +628,7 @@ export default function PlantProfile() {
       }
 
       const fertilizedDate = format(new Date(logRow.created_at), 'yyyy-MM-dd');
+      const fertilizerFrequencyDays = normalizeFertilizerFrequencyDays(plant.fertilizer_frequency_days, 30);
 
       const { data: updated, error: plantError } = await supabase
         .from('plants')
@@ -617,6 +641,18 @@ export default function PlantProfile() {
         toast.error(plantError?.message ?? 'Could not save fertilizer date');
         await fetchActivities(plant.name);
         return;
+      }
+
+      const { error: activityUpdateError } = await supabase
+        .from('activity_logs')
+        .update({
+          details: `Last fertilized on this plant’s record is now ${formatCareDay(fertilizedDate)}. ${fertilizerCadenceSentence(
+            fertilizerFrequencyDays,
+          )}`,
+        })
+        .eq('id', logRow.id);
+      if (activityUpdateError) {
+        console.warn('activity_logs update:', activityUpdateError.message);
       }
 
       toast.success(`${plant.name} fertilized`);
@@ -649,13 +685,50 @@ export default function PlantProfile() {
         })
         .eq('id', plantId);
       if (error) throw error;
-      toast.success('Fertilizer schedule saved');
+      toast.success('Fertilizer seasons and notes saved');
       await fetchPlant();
     } catch (e) {
       console.error(e);
       toast.error('Could not save fertilizer settings');
     } finally {
       setFertSettingsBusy(false);
+    }
+  };
+
+  const saveFertilizerSchedule = async () => {
+    if (!plant || isWriteDisabled) return;
+    const parsedDays = parseInt(fertScheduleDraft.frequencyDays, 10);
+    if (!Number.isFinite(parsedDays) || parsedDays < 0) {
+      toast.error('Fertilizer frequency must be 0 days or more');
+      return;
+    }
+    setFertScheduleBusy(true);
+    try {
+      const { error } = await supabase
+        .from('plants')
+        .update({
+          fertilizer_frequency_days: parsedDays,
+          last_fertilized: fertScheduleDraft.lastFertilized.trim() || null,
+        })
+        .eq('id', plantId);
+      if (error) throw error;
+      await logActivityDb(
+        'Fertilizer Schedule Updated',
+        plant.name,
+        `${fertilizerCadenceSentence(parsedDays)} Last fertilized date is ${
+          fertScheduleDraft.lastFertilized.trim()
+            ? formatCareDay(fertScheduleDraft.lastFertilized.trim())
+            : 'not set'
+        }.`,
+      );
+      toast.success('Fertilizer schedule saved');
+      await fetchPlant();
+      await fetchActivities(plant.name);
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not save fertilizer schedule');
+    } finally {
+      setFertScheduleBusy(false);
     }
   };
 
@@ -745,6 +818,10 @@ export default function PlantProfile() {
     setFertDraft({
       seasons: normalizeFertilizerSeasons(plant.fertilizer_seasons),
       notes: plant.fertilizer_notes ?? '',
+    });
+    setFertScheduleDraft({
+      frequencyDays: String(plant.fertilizer_frequency_days),
+      lastFertilized: isoOrDateToDateInputValue(plant.last_fertilized),
     });
   }, [plant?.id]);
 
@@ -1013,11 +1090,16 @@ export default function PlantProfile() {
 
   const fertU = fertilizerUrgency(plant);
   const plantSeasons = normalizeFertilizerSeasons(plant.fertilizer_seasons);
+  const nextFertilizerDueLabel = formatNextFertilizationDue(plant);
+  const fertilizerDueLine = nextFertilizerDueLabel === '—' ? '—' : `Next due ~ ${nextFertilizerDueLabel}`;
   const wateredToday = isPlantCareDateToday(plant.last_watered);
   const fertilizedToday = isPlantCareDateToday(plant.last_fertilized);
   const fertDraftMatchesPlant =
     JSON.stringify(normalizeFertilizerSeasons(fertDraft.seasons)) === JSON.stringify(plantSeasons) &&
     (fertDraft.notes.trim() || '') === (plant.fertilizer_notes ?? '').trim();
+  const fertScheduleDraftMatchesPlant =
+    fertScheduleDraft.frequencyDays.trim() === String(plant.fertilizer_frequency_days) &&
+    fertScheduleDraft.lastFertilized === isoOrDateToDateInputValue(plant.last_fertilized);
   const baseWaterDue = waterDueDate(plant.last_watered, plant.watering_frequency_days);
   const wateringAdjustment =
     baseWaterDue && forecast ? calculateWateringAdjustment(plant, forecast) : null;
@@ -1558,16 +1640,16 @@ export default function PlantProfile() {
                     {formatCareDay(plant.last_fertilized)}
                   </p>
                   <p className="text-sm text-desert-sage dark:text-zinc-300">
-                    Every {plant.fertilizer_frequency_days} day
-                    {plant.fertilizer_frequency_days === 1 ? '' : 's'} · Next (in active seasons):{' '}
+                    Fertilize every {plant.fertilizer_frequency_days} day
+                    {plant.fertilizer_frequency_days === 1 ? '' : 's'} ·{' '}
                     <span
                       className={cn(
-                        fertU === 'overdue' || fertU === 'due_soon'
+                        (fertU === 'overdue' || fertU === 'due_soon') && fertilizerDueLine !== '—'
                           ? 'font-medium text-orange-600 dark:text-orange-400'
                           : '',
                       )}
                     >
-                      {formatNextFertilizationDue(plant)}
+                      {fertilizerDueLine}
                     </span>
                   </p>
                   <p className="text-xs text-desert-dust dark:text-zinc-300">
@@ -1786,6 +1868,54 @@ export default function PlantProfile() {
                 disabled={isWriteDisabled}
               />
             </div>
+            <div className="space-y-3 rounded-2xl border border-desert-mist/70 bg-white/60 p-4 dark:border-zinc-600 dark:bg-zinc-800/80">
+              <p className="text-sm font-medium text-desert-ink dark:text-zinc-100">Adjust fertilizer schedule</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="profile-fert-frequency">Fertilize every (days)</Label>
+                  <Input
+                    id="profile-fert-frequency"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={fertScheduleDraft.frequencyDays}
+                    onChange={(e) =>
+                      setFertScheduleDraft((draft) => ({
+                        ...draft,
+                        frequencyDays: e.target.value,
+                      }))
+                    }
+                    disabled={isWriteDisabled}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="profile-last-fertilized">Last fertilized date</Label>
+                  <Input
+                    id="profile-last-fertilized"
+                    type="date"
+                    value={fertScheduleDraft.lastFertilized}
+                    onChange={(e) =>
+                      setFertScheduleDraft((draft) => ({
+                        ...draft,
+                        lastFertilized: e.target.value,
+                      }))
+                    }
+                    disabled={isWriteDisabled}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                className="rounded-full bg-oasis hover:bg-oasis-hover"
+                disabled={isWriteDisabled || fertScheduleBusy || fertScheduleDraftMatchesPlant}
+                onClick={() => void saveFertilizerSchedule()}
+              >
+                {fertScheduleBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save fertilizer settings
+              </Button>
+            </div>
             <div>
               <Label htmlFor="profile-fert-notes">Notes</Label>
               <Textarea
@@ -1804,7 +1934,7 @@ export default function PlantProfile() {
               onClick={() => void saveFertilizerSettings()}
             >
               {fertSettingsBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Save fertilizer settings
+              Save fertilizer seasons & notes
             </Button>
           </CardContent>
         </Card>
@@ -1867,24 +1997,36 @@ export default function PlantProfile() {
                 {careLogs.map((log) => (
                   <li
                     key={log.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-desert-mist/60 bg-white/60 px-4 py-3 text-sm dark:border-zinc-600 dark:bg-zinc-800/85"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-desert-mist/60 bg-white/60 px-4 py-3 text-sm dark:border-zinc-600 dark:bg-zinc-800/85"
                   >
-                    <span className="font-medium text-desert-ink dark:text-zinc-100">
-                      {isWaterLogAction(log.action) ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Droplet className="h-4 w-4 text-sky-600" />
-                          Watered
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <span className="font-medium text-desert-ink dark:text-zinc-100">
+                        {isWaterLogAction(log.action) ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Droplet className="h-4 w-4 text-sky-600" />
+                            Watered
+                          </span>
+                        ) : isFertilizerScheduleLogAction(log.action) ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Sprout className="h-4 w-4 text-amber-600" />
+                            Fertilizer schedule
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Sprout className="h-4 w-4 text-amber-600" />
+                            Fertilized
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-xs font-normal text-desert-dust dark:text-zinc-300">
+                        {log.action}
+                      </span>
+                      {log.details ? (
+                        <span className="block text-xs text-desert-sage dark:text-zinc-300">
+                          {log.details}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Sprout className="h-4 w-4 text-amber-600" />
-                          Fertilized
-                        </span>
-                      )}
-                    </span>
-                    <span className="mt-0.5 block text-xs font-normal text-desert-dust dark:text-zinc-300">
-                      {log.action}
-                    </span>
+                      ) : null}
+                    </div>
                     <span className="shrink-0 text-xs text-desert-dust dark:text-zinc-300">
                       {formatLogWhen(log.created_at)}
                     </span>
@@ -1915,7 +2057,12 @@ export default function PlantProfile() {
                     key={log.id}
                     className="flex justify-between items-start gap-3 p-4 bg-white/60 rounded-2xl border border-desert-mist dark:border-zinc-600 dark:bg-zinc-800/85"
                   >
-                    <div className="font-medium">{log.action}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{log.action}</div>
+                      {log.details ? (
+                        <div className="mt-1 text-sm text-desert-sage dark:text-zinc-300">{log.details}</div>
+                      ) : null}
+                    </div>
                     <div className="text-right text-xs text-desert-dust whitespace-nowrap dark:text-zinc-300">
                       {formatLogWhen(log.created_at)}
                     </div>

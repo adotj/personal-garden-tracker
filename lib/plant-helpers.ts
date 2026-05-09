@@ -1,6 +1,6 @@
 import { format, isSameDay, isValid, parseISO } from 'date-fns';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
-import { normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
+import { normalizeFertilizerFrequencyDays, normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
 
 const SUN_EXPOSURE_SET = new Set<string>(['full_sun', 'partial_sun', 'partial_shade', 'full_shade']);
 
@@ -53,7 +53,7 @@ export function normalizePlantRow(row: Plant): Plant {
   return {
     ...row,
     watering_frequency_days: Number(row.watering_frequency_days) || 7,
-    fertilizer_frequency_days: Number(row.fertilizer_frequency_days) || 30,
+    fertilizer_frequency_days: normalizeFertilizerFrequencyDays(row.fertilizer_frequency_days, 30),
     last_watered: row.last_watered ?? null,
     last_fertilized: row.last_fertilized ?? null,
     fertilizer_seasons: normalizeFertilizerSeasons(row.fertilizer_seasons),

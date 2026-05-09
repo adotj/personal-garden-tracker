@@ -466,7 +466,7 @@ export function GardenPageClient() {
     const fertDays =
       newPlant.fertilizer_frequency_days === ''
         ? 30
-        : Math.max(1, Number(newPlant.fertilizer_frequency_days));
+        : Math.max(0, Number(newPlant.fertilizer_frequency_days));
     const seasons =
       newPlant.fertilizer_seasons?.length > 0 ? newPlant.fertilizer_seasons : [...ALL_FERTILIZER_SEASONS];
 
@@ -517,8 +517,8 @@ export function GardenPageClient() {
       Number.isFinite(wParsed) && wParsed >= 1 ? wParsed : editingPlant.watering_frequency_days,
     );
     const ff = Math.max(
-      1,
-      Number.isFinite(fParsed) && fParsed >= 1 ? fParsed : editingPlant.fertilizer_frequency_days,
+      0,
+      Number.isFinite(fParsed) && fParsed >= 0 ? fParsed : editingPlant.fertilizer_frequency_days,
     );
     const merged: Plant = {
       ...editingPlant,
@@ -926,7 +926,7 @@ export function GardenPageClient() {
                     <Label>Fertilize every (days)</Label>
                     <Input
                       type="number"
-                      min={1}
+                      min={0}
                       inputMode="numeric"
                       required
                       value={newPlant.fertilizer_frequency_days === '' ? '' : newPlant.fertilizer_frequency_days}
@@ -1256,7 +1256,7 @@ export function GardenPageClient() {
                   <Label>Fertilize every (days)</Label>
                   <Input
                     type="number"
-                    min={1}
+                    min={0}
                     inputMode="numeric"
                     value={editFertDays}
                     onChange={(e) => setEditFertDays(e.target.value)}

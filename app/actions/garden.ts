@@ -15,6 +15,7 @@ import {
 } from '@/lib/plant-helpers';
 import {
   ALL_FERTILIZER_SEASONS,
+  normalizeFertilizerFrequencyDays,
   normalizeFertilizerSeasons,
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
@@ -95,6 +96,13 @@ async function logActivity(action: string, plant_name?: string, details?: string
 
 function plantWateredDetails(when: string) {
   return `Last watered on this plant’s record is now ${formatPlantCareInstant(when, 'profile')}.`;
+}
+
+function fertilizerCadenceSentence(frequencyDays: number): string {
+  if (frequencyDays === 0) {
+    return 'Fertilizer cadence is set to as needed (no recurring interval).';
+  }
+  return `Fertilizer cadence is every ${frequencyDays} day${frequencyDays === 1 ? '' : 's'} during active seasons.`;
 }
 
 async function logPlantWateredActivities(supabase: SupabaseServerClient, plantNames: string[], when: string) {
@@ -188,6 +196,7 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
       input.plant.fertilizer_seasons?.length > 0
         ? input.plant.fertilizer_seasons
         : [...ALL_FERTILIZER_SEASONS];
+    const fertilizerFrequencyDays = normalizeFertilizerFrequencyDays(input.plant.fertilizer_frequency_days, 30);
 
     const coreRow = plantInsertCorePayload({
       name: input.plant.name,
@@ -212,7 +221,7 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
       .update(
         plantInsertExtendedPatch({
           sun_exposure: input.plant.sun_exposure,
-          fertilizer_frequency_days: Math.max(1, input.plant.fertilizer_frequency_days),
+          fertilizer_frequency_days: fertilizerFrequencyDays,
           fertilizer_seasons: seasons,
           fertilizer_notes: input.plant.fertilizer_notes,
           location_in_garden: input.plant.location_in_garden,
@@ -236,7 +245,11 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
     const addDetails = [
       `${coreRow.container_type}, ${coreRow.pot_size}.`,
       `Sun: ${sunExposureLabel(input.plant.sun_exposure)}.`,
-      `Water every ${coreRow.watering_frequency_days} day${coreRow.watering_frequency_days === 1 ? '' : 's'}; fertilize every ${Math.max(1, input.plant.fertilizer_frequency_days)} day${Math.max(1, input.plant.fertilizer_frequency_days) === 1 ? '' : 's'}.`,
+      `Water every ${coreRow.watering_frequency_days} day${coreRow.watering_frequency_days === 1 ? '' : 's'}; ${
+        fertilizerFrequencyDays === 0
+          ? 'fertilize as needed (no recurring interval)'
+          : `fertilize every ${fertilizerFrequencyDays} day${fertilizerFrequencyDays === 1 ? '' : 's'}`
+      }.`,
     ];
     if (seasons.length > 0 && seasons.length < ALL_FERTILIZER_SEASONS.length) {
       addDetails.push(`Fertilizer scheduled in: ${seasons.map(seasonLabel).join(', ')}.`);
@@ -256,7 +269,7 @@ export async function updatePlantAction(input: UpdatePlantInput): Promise<Action
     const merged = {
       ...input.plant,
       watering_frequency_days: Math.max(1, input.plant.watering_frequency_days),
-      fertilizer_frequency_days: Math.max(1, input.plant.fertilizer_frequency_days),
+      fertilizer_frequency_days: normalizeFertilizerFrequencyDays(input.plant.fertilizer_frequency_days, 30),
       fertilizer_seasons: normalizeFertilizerSeasons(input.plant.fertilizer_seasons),
     };
 
@@ -287,7 +300,11 @@ export async function updatePlantAction(input: UpdatePlantInput): Promise<Action
     const editDetails = [
       `${merged.container_type}, ${merged.pot_size}.`,
       `Sun: ${sunExposureLabel(merged.sun_exposure)}.`,
-      `Water every ${merged.watering_frequency_days} day${merged.watering_frequency_days === 1 ? '' : 's'}; fertilize every ${merged.fertilizer_frequency_days} day${merged.fertilizer_frequency_days === 1 ? '' : 's'}.`,
+      `Water every ${merged.watering_frequency_days} day${merged.watering_frequency_days === 1 ? '' : 's'}; ${
+        merged.fertilizer_frequency_days === 0
+          ? 'fertilize as needed (no recurring interval)'
+          : `fertilize every ${merged.fertilizer_frequency_days} day${merged.fertilizer_frequency_days === 1 ? '' : 's'}`
+      }.`,
       `Fertilizer seasons: ${merged.fertilizer_seasons.map(seasonLabel).join(', ')}.`,
     ];
     if (merged.photo_url && merged.photo_url !== input.photoBaseline) {
@@ -403,7 +420,7 @@ export async function markFertilizedAction(
     const supabase = await createSupabaseServerClient();
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
-      .select('id, name, last_fertilized')
+      .select('id, name, last_fertilized, fertilizer_frequency_days')
       .eq('id', id)
       .single();
     if (plantErr || !plant) return { ok: false, error: plantErr?.message || 'Plant not found' };
@@ -437,10 +454,13 @@ export async function markFertilizedAction(
     const fertWhen = isValid(parseISO(fertilizedDate))
       ? format(parseISO(fertilizedDate), 'MMMM d, yyyy')
       : fertilizedDate;
+    const fertilizerFrequencyDays = normalizeFertilizerFrequencyDays(plant.fertilizer_frequency_days, 30);
     await supabase
       .from('activity_logs')
       .update({
-        details: `Last fertilized on this plant’s record is now ${fertWhen} (from the dashboard).`,
+        details: `Last fertilized on this plant’s record is now ${fertWhen} (from the dashboard). ${fertilizerCadenceSentence(
+          fertilizerFrequencyDays,
+        )}`,
       })
       .eq('id', logRow.id);
     const { error: fertLogErr } = await supabase.from('fertilizer_logs').insert({
