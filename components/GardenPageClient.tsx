@@ -633,6 +633,11 @@ export function GardenPageClient() {
 
   const markFertilized = async (id: string, name: string) => {
     if (isWriteDisabled) return;
+    const plant = plants.find((p) => p.id === id);
+    if (plant && fertilizerUrgency(plant) === 'off_season') {
+      toast.info(`${name} is in fertilizer off-season.`);
+      return;
+    }
     const result = await markFertilizedAction(id);
     if (!result.ok) {
       toast.error(result.error || 'Failed to record fertilizing');

@@ -610,6 +610,10 @@ export default function PlantProfile() {
 
   const markFertilizedFromProfile = async () => {
     if (!plant || isWriteDisabled) return;
+    if (fertilizerUrgency(plant) === 'off_season') {
+      toast.info('Fertilizer off-season');
+      return;
+    }
     if (isPlantCareDateToday(plant.last_fertilized)) {
       toast.info(`${plant.name} is already marked as fertilized today.`);
       return;
@@ -1692,8 +1696,13 @@ export default function PlantProfile() {
               </Button>
               <Button
                 type="button"
-                className="rounded-full bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400 disabled:opacity-100 disabled:bg-amber-700/90 disabled:text-amber-50 dark:disabled:bg-amber-500/65 dark:disabled:text-amber-50"
-                disabled={isWriteDisabled || careBusy !== null || fertilizedToday}
+                className={cn(
+                  'rounded-full bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400 disabled:opacity-100 disabled:bg-amber-700/90 disabled:text-amber-50 dark:disabled:bg-amber-500/65 dark:disabled:text-amber-50',
+                  fertU === 'off_season' &&
+                    'disabled:bg-zinc-300 disabled:text-zinc-700 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-300',
+                )}
+                disabled={isWriteDisabled || careBusy !== null || fertilizedToday || fertU === 'off_season'}
+                title={fertU === 'off_season' ? 'Fertilizer off-season' : undefined}
                 onClick={() => void markFertilizedFromProfile()}
               >
                 {careBusy === 'fert' ? (

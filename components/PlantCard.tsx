@@ -161,8 +161,13 @@ export function PlantCard({
           <Button
             size="sm"
             onClick={() => onMarkFertilized(plant.id, plant.name)}
-            disabled={isDemoMode || isPlantCareDateToday(plant.last_fertilized)}
-            className="h-7 flex-1 rounded-full px-2 text-xs bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400 disabled:opacity-100 disabled:bg-amber-700/90 disabled:text-amber-50 dark:disabled:bg-amber-500/65 dark:disabled:text-amber-50"
+            disabled={isDemoMode || isPlantCareDateToday(plant.last_fertilized) || fertU === 'off_season'}
+            title={fertU === 'off_season' ? 'Fertilizer off-season' : undefined}
+            className={cn(
+              'h-7 flex-1 rounded-full px-2 text-xs bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:text-zinc-950 dark:hover:bg-amber-400 disabled:opacity-100 disabled:bg-amber-700/90 disabled:text-amber-50 dark:disabled:bg-amber-500/65 dark:disabled:text-amber-50',
+              fertU === 'off_season' &&
+                'disabled:bg-zinc-300 disabled:text-zinc-700 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-300',
+            )}
           >
             <Sprout className="mr-1 h-3.5 w-3.5" />
             Fert
