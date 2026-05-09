@@ -53,10 +53,10 @@ import {
   deletePlantAction,
   markAllWateredTodayAction,
   markFertilizedAction,
-  markSelectedTodayPlantsWateredAction,
   markWateredAction,
   updatePlantAction,
 } from '@/app/actions/garden';
+import { markPlantWateredWithLog } from '@/lib/plant-care-log';
 import { GardenHeader, GardenWeather } from '@/components/GardenHeader';
 import { PlantGrid } from '@/components/PlantGrid';
 import { ActivityLog } from '@/components/ActivityLog';
@@ -574,50 +574,47 @@ export function GardenPageClient() {
       return false;
     }
 
-    setBulkWateringTodayBusy(true);
-    const result = await markSelectedTodayPlantsWateredAction(plantIds, currentClientCareDay());
-    if (!result.ok && result.error === 'Selected plants could not be found.') {
-      const uniqueIds = Array.from(new Set(plantIds));
-      if (uniqueIds.length === 0) {
-        setBulkWateringTodayBusy(false);
-        toast.info('Select at least one plant due today.');
-        return false;
-      }
-      const when = new Date().toISOString();
-      const { error: updateError } = await supabase
-        .from('plants')
-        .update({ last_watered: when })
-        .in('id', uniqueIds);
-      if (updateError) {
-        setBulkWateringTodayBusy(false);
-        toast.error(updateError.message || 'Could not mark selected plants watered');
-        return false;
-      }
-      await supabase.from('activity_logs').insert({
-        action: 'Plant Watered',
-        details: `Bulk watered ${uniqueIds.length} plant${uniqueIds.length === 1 ? '' : 's'} from dashboard fallback.`,
-        created_at: when,
-      });
-      setBulkWateringTodayBusy(false);
-      const updatedIdSet = new Set(uniqueIds);
-      setPlants((prev) =>
-        prev.map((plant) => (updatedIdSet.has(plant.id) ? { ...plant, last_watered: when } : plant)),
-      );
-      toast.success(`✅ Marked ${uniqueIds.length} plant${uniqueIds.length === 1 ? '' : 's'} watered.`);
-      await fetchActivities();
-      return true;
-    }
-    setBulkWateringTodayBusy(false);
-    if (!result.ok) {
-      toast.info(result.error || 'Could not mark selected plants watered');
+    const selectedPlants = plants.filter((plant) => plantIds.includes(plant.id));
+    if (selectedPlants.length === 0) {
+      toast.info('Select at least one plant due today.');
       return false;
     }
 
-    const updatedIdSet = new Set(result.data.updatedIds);
-    setPlants((prev) =>
-      prev.map((plant) => (updatedIdSet.has(plant.id) ? { ...plant, last_watered: result.data.when } : plant)),
+    setBulkWateringTodayBusy(true);
+    const when = new Date().toISOString();
+    const results = await Promise.all(
+      selectedPlants.map((plant) =>
+        markPlantWateredWithLog({
+          supabase,
+          plantId: plant.id,
+          plantName: plant.name,
+          lastWatered: plant.last_watered,
+          when,
+        }),
+      ),
     );
-    toast.success(`✅ Marked ${result.data.updatedIds.length} plant${result.data.updatedIds.length === 1 ? '' : 's'} watered.`);
+    setBulkWateringTodayBusy(false);
+
+    const failed = results.filter((result) => !result.ok);
+    if (failed.length > 0) {
+      toast.error(failed[0]?.error || 'Could not mark selected plants watered');
+      return false;
+    }
+
+    const updatedIds = selectedPlants
+      .map((plant, idx) => ({ plant, result: results[idx] }))
+      .filter(({ result }) => result.ok && !result.alreadyToday)
+      .map(({ plant }) => plant.id);
+    if (updatedIds.length === 0) {
+      toast.info('Selected plants are already marked watered today.');
+      return false;
+    }
+
+    const updatedIdSet = new Set(updatedIds);
+    setPlants((prev) =>
+      prev.map((plant) => (updatedIdSet.has(plant.id) ? { ...plant, last_watered: when } : plant)),
+    );
+    toast.success(`✅ Marked ${updatedIds.length} plant${updatedIds.length === 1 ? '' : 's'} watered.`);
     await fetchActivities();
     return true;
   };

@@ -14,8 +14,8 @@ import {
   normalizeSunExposure,
   plantUpdateCorePayload,
   plantUpdateExtendedPatch,
-  wateringLoggedAtIso,
 } from '@/lib/plant-helpers';
+import { markPlantWateredWithLog } from '@/lib/plant-care-log';
 import {
   ALL_FERTILIZER_SEASONS,
   fertilizerUrgency,
@@ -558,16 +558,22 @@ export default function PlantProfile() {
 
   const markWateredFromProfile = async () => {
     if (!plant || isWriteDisabled) return;
-    if (isPlantCareDateToday(plant.last_watered)) {
-      toast.info(`${plant.name} is already marked as watered today.`);
-      return;
-    }
     setCareBusy('water');
     try {
-      const when = wateringLoggedAtIso();
-      const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', plantId);
-      if (error) throw error;
-      await logActivityDb('Plant Watered', plant.name);
+      const result = await markPlantWateredWithLog({
+        supabase,
+        plantId,
+        plantName: plant.name,
+        lastWatered: plant.last_watered,
+      });
+      if (!result.ok) {
+        toast.error(result.error || 'Could not update watering');
+        return;
+      }
+      if (result.alreadyToday) {
+        toast.info(`${plant.name} is already marked as watered today.`);
+        return;
+      }
       toast.success(`${plant.name} watered`);
       await fetchPlant();
       await fetchActivities(plant.name);
