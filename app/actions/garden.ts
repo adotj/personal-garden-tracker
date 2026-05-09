@@ -344,26 +344,28 @@ export async function markSelectedTodayPlantsWateredAction(
       .select('id, name, last_watered')
       .in('id', uniqueIds);
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load selected plants' };
+    if (rows.length === 0) return { ok: false, error: 'Selected plants could not be found.' };
     const pendingRows = rows.filter((row) => !isPlantCareDateInClientDay(row.last_watered, parsedClientCareDay));
     const pendingIds = pendingRows.map((row) => row.id as string);
-    if (pendingIds.length === 0) return { ok: false, error: 'Selected plants are already marked watered today.' };
+    const idsToUpdate = pendingIds.length > 0 ? pendingIds : rows.map((row) => row.id as string);
+    const rowsToLog = pendingRows.length > 0 ? pendingRows : rows;
 
     const when = wateringLoggedAtIso();
-    const { error } = await supabase.from('plants').update({ last_watered: when }).in('id', pendingIds);
+    const { error } = await supabase.from('plants').update({ last_watered: when }).in('id', idsToUpdate);
     if (error) return { ok: false, error: error.message || 'Could not mark selected plants watered' };
 
     await logPlantWateredActivities(
       supabase,
-      pendingRows.map((row) => (typeof row.name === 'string' ? row.name : '')),
+      rowsToLog.map((row) => (typeof row.name === 'string' ? row.name : '')),
       when,
     );
     await logActivity(
       'Plant Watered',
       undefined,
-      `Bulk watered ${pendingIds.length} plant${pendingIds.length === 1 ? '' : 's'}. Last watered is now ${formatPlantCareInstant(when, 'profile')}.`,
+      `Bulk watered ${idsToUpdate.length} plant${idsToUpdate.length === 1 ? '' : 's'}. Last watered is now ${formatPlantCareInstant(when, 'profile')}.`,
       when,
     );
-    return { ok: true, data: { updatedIds: pendingIds, when } };
+    return { ok: true, data: { updatedIds: idsToUpdate, when } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not mark selected plants watered' };
   }
