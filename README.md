@@ -10,7 +10,6 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Add, edit, and delete plants with container type/size and watering frequency
 - Upload and display photos for each plant (Supabase Storage)
 - Smart, heat-aware watering reminders (adjusted for Arizona desert conditions)
-- PWA push notifications (Phase 1): enable per device and send test notifications
 - Full activity log showing who did what and when
 - Dark mode toggle
 - Supabase email magic-link authentication
@@ -35,25 +34,6 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Watering history charts and analytics
 - Scheduled/automated reminder campaigns (beyond manual test send)
 - Export garden data as CSV
-
-### Push Notifications (Phase 1 Setup)
-
-1. Generate VAPID keys once:
-   ```bash
-   npm run generate:vapid
-   ```
-2. Add the generated values to your environment:
-   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
-   - `VAPID_PRIVATE_KEY`
-3. Apply Supabase migrations (includes `push_subscriptions` table).
-4. Open the app on your phone, tap **Enable notifications**, then tap **Send test notification**.
-
-#### iOS (Home Screen) flow
-
-1. Open the app in Safari.
-2. Tap **Share** → **Add to Home Screen**.
-3. Launch the installed Home Screen app.
-4. Tap **Enable notifications** and allow permission when prompted.
 
 ### Screenshots
 
