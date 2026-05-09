@@ -96,7 +96,9 @@ type DesertPresetFilter = (typeof DESERT_PRESET_FILTERS)[number];
 export function GardenPageClient() {
   const [session, setSession] = useState<Session | null>(null);
   const [authEmail, setAuthEmail] = useState('');
-  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -188,27 +190,30 @@ export function GardenPageClient() {
     newMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');
   };
 
-  const handleMagicLinkSignIn = async (e: React.FormEvent) => {
+  const handlePasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = authEmail.trim();
-    if (!email) return;
+    if (!email || !authPassword) return;
 
-    setIsSendingMagicLink(true);
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
-    const { error } = await supabase.auth.signInWithOtp({
+    setAuthError('');
+    setIsSigningIn(true);
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: redirectTo,
-      },
+      password: authPassword,
     });
-    setIsSendingMagicLink(false);
+    setIsSigningIn(false);
 
     if (error) {
-      toast.error(error.message || 'Could not send sign-in link');
+      const normalizedMessage = error.message.toLowerCase();
+      const message =
+        normalizedMessage.includes('invalid login credentials') ||
+        normalizedMessage.includes('invalid email or password')
+          ? 'Invalid email or password'
+          : error.message || 'Could not sign in';
+      setAuthError(message);
+      toast.error(message);
       return;
     }
-
-    toast.success('Magic link sent. Check your email to enter the garden.');
   };
 
   const handleLogout = async () => {
@@ -644,25 +649,41 @@ export function GardenPageClient() {
           <div className="flex justify-center mb-6"><Lock className="h-12 w-12 text-oasis" /></div>
           <h1 className="text-4xl font-bold text-center text-oasis mb-2">Laveen Garden</h1>
           <p className="mb-6 text-center text-sm text-desert-sage">
-            Sign in with your email to receive a magic link.
+            Sign in with your email and password.
           </p>
-          <form onSubmit={handleMagicLinkSignIn} className="space-y-6">
+          <form onSubmit={handlePasswordSignIn} className="space-y-6">
             <Input
               type="email"
               value={authEmail}
-              onChange={(e) => setAuthEmail(e.target.value)}
+              onChange={(e) => {
+                setAuthEmail(e.target.value);
+                if (authError) setAuthError('');
+              }}
               placeholder="you@example.com"
               autoComplete="email"
               required
               className="text-lg py-6"
             />
+            <Input
+              type="password"
+              value={authPassword}
+              onChange={(e) => {
+                setAuthPassword(e.target.value);
+                if (authError) setAuthError('');
+              }}
+              placeholder="Password"
+              autoComplete="current-password"
+              required
+              className="text-lg py-6"
+            />
             <Button
               type="submit"
-              disabled={isSendingMagicLink}
+              disabled={isSigningIn}
               className="w-full bg-oasis hover:bg-oasis-hover py-6 text-lg rounded-full"
             >
-              {isSendingMagicLink ? 'Sending link...' : 'Send Magic Link'}
+              {isSigningIn ? 'Signing In...' : 'Sign In'}
             </Button>
+            {authError ? <p className="text-sm text-center text-red-500">{authError}</p> : null}
           </form>
         </div>
       </div>
