@@ -23,6 +23,46 @@ import { datetimeLocalToIsoUtc } from '@/lib/photo-timeline';
 import { format, isValid, parseISO } from 'date-fns';
 
 type SupabaseServerClient = ReturnType<typeof createSupabaseServerClient>;
+type ClientCareDay = {
+  todayDateKey: string;
+  startIso: string;
+  endIso: string;
+};
+
+type ParsedClientCareDay = {
+  todayDateKey: string;
+  start: Date;
+  end: Date;
+};
+
+function isDateOnlyIsoString(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
+}
+
+function parseClientCareDay(clientCareDay?: ClientCareDay): ParsedClientCareDay | null {
+  if (!clientCareDay) return null;
+  const { todayDateKey, startIso, endIso } = clientCareDay;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(todayDateKey)) return null;
+  const start = parseISO(startIso);
+  const end = parseISO(endIso);
+  if (!isValid(start) || !isValid(end) || end <= start) return null;
+  return { todayDateKey, start, end };
+}
+
+function isPlantCareDateInClientDay(
+  iso: string | null | undefined,
+  clientCareDay: ParsedClientCareDay | null,
+): boolean {
+  if (!iso?.trim()) return false;
+  const normalized = iso.trim();
+  if (clientCareDay && isDateOnlyIsoString(normalized)) {
+    return normalized === clientCareDay.todayDateKey;
+  }
+  const parsed = parseISO(normalized);
+  if (!isValid(parsed)) return false;
+  if (!clientCareDay) return isPlantCareDateToday(normalized);
+  return parsed >= clientCareDay.start && parsed < clientCareDay.end;
+}
 
 function getWeatherCondition(code: number): string {
   if (code === 0) return 'Sunny';
@@ -261,8 +301,12 @@ export async function updatePlantAction(input: UpdatePlantInput): Promise<Action
   }
 }
 
-export async function markWateredAction(id: string): Promise<ActionResult<{ alreadyToday: boolean; when: string; name: string }>> {
+export async function markWateredAction(
+  id: string,
+  clientCareDay?: ClientCareDay,
+): Promise<ActionResult<{ alreadyToday: boolean; when: string; name: string }>> {
   try {
+    const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const supabase = createSupabaseServerClient();
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
@@ -272,7 +316,7 @@ export async function markWateredAction(id: string): Promise<ActionResult<{ alre
     if (plantErr || !plant) {
       return { ok: false, error: plantErr?.message || 'Plant not found' };
     }
-    if (isPlantCareDateToday(plant.last_watered)) {
+    if (isPlantCareDateInClientDay(plant.last_watered, parsedClientCareDay)) {
       return { ok: true, data: { alreadyToday: true, when: plant.last_watered || '', name: plant.name } };
     }
     const when = wateringLoggedAtIso();
@@ -287,8 +331,10 @@ export async function markWateredAction(id: string): Promise<ActionResult<{ alre
 
 export async function markSelectedTodayPlantsWateredAction(
   plantIds: string[],
+  clientCareDay?: ClientCareDay,
 ): Promise<ActionResult<{ updatedIds: string[]; when: string }>> {
   try {
+    const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const uniqueIds = Array.from(new Set(plantIds));
     if (uniqueIds.length === 0) return { ok: false, error: 'Select at least one plant due today.' };
 
@@ -298,7 +344,7 @@ export async function markSelectedTodayPlantsWateredAction(
       .select('id, name, last_watered')
       .in('id', uniqueIds);
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load selected plants' };
-    const pendingRows = rows.filter((row) => !isPlantCareDateToday(row.last_watered));
+    const pendingRows = rows.filter((row) => !isPlantCareDateInClientDay(row.last_watered, parsedClientCareDay));
     const pendingIds = pendingRows.map((row) => row.id as string);
     if (pendingIds.length === 0) return { ok: false, error: 'Selected plants are already marked watered today.' };
 
@@ -323,13 +369,18 @@ export async function markSelectedTodayPlantsWateredAction(
   }
 }
 
-export async function markAllWateredTodayAction(): Promise<ActionResult<{ when: string; total: number }>> {
+export async function markAllWateredTodayAction(
+  clientCareDay?: ClientCareDay,
+): Promise<ActionResult<{ when: string; total: number }>> {
   try {
+    const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const supabase = createSupabaseServerClient();
     const { data: rows, error: rowsErr } = await supabase.from('plants').select('id, last_watered');
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load plants' };
     if (rows.length === 0) return { ok: false, error: 'No plants to update yet.' };
-    const alreadyWatered = rows.filter((row) => isPlantCareDateToday(row.last_watered)).length;
+    const alreadyWatered = rows.filter((row) =>
+      isPlantCareDateInClientDay(row.last_watered, parsedClientCareDay),
+    ).length;
     if (alreadyWatered === rows.length) {
       return { ok: false, error: 'All plants are already marked watered today.' };
     }

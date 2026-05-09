@@ -71,6 +71,24 @@ function dateInputToday(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+type ClientCareDay = {
+  todayDateKey: string;
+  startIso: string;
+  endIso: string;
+};
+
+function currentClientCareDay(now: Date = new Date()): ClientCareDay {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return {
+    todayDateKey: format(start, 'yyyy-MM-dd'),
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
+}
+
 function createDefaultNewPlant(): NewPlantForm {
   const today = dateInputToday();
   return {
@@ -533,7 +551,7 @@ export function GardenPageClient() {
 
   const markWatered = async (id: string, name: string) => {
     if (isWriteDisabled) return;
-    const result = await markWateredAction(id);
+    const result = await markWateredAction(id, currentClientCareDay());
     if (!result.ok) {
       toast.error(result.error || 'Could not mark watered');
       return;
@@ -557,7 +575,7 @@ export function GardenPageClient() {
     }
 
     setBulkWateringTodayBusy(true);
-    const result = await markSelectedTodayPlantsWateredAction(plantIds);
+    const result = await markSelectedTodayPlantsWateredAction(plantIds, currentClientCareDay());
     setBulkWateringTodayBusy(false);
     if (!result.ok) {
       toast.info(result.error || 'Could not mark selected plants watered');
@@ -575,7 +593,7 @@ export function GardenPageClient() {
 
   const markAllWateredToday = async () => {
     if (isWriteDisabled) return;
-    const result = await markAllWateredTodayAction();
+    const result = await markAllWateredTodayAction(currentClientCareDay());
     if (!result.ok) {
       toast.info(result.error || 'Could not apply rainy day watering');
       return;
