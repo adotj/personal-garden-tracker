@@ -12,10 +12,7 @@ import {
   isPlantCareDateToday,
   normalizePlantRow,
   normalizeSunExposure,
-  plantUpdateCorePayload,
-  plantUpdateExtendedPatch,
 } from '@/lib/plant-helpers';
-import { markPlantWateredWithLog } from '@/lib/plant-care-log';
 import {
   ALL_FERTILIZER_SEASONS,
   fertilizerUrgency,
@@ -25,9 +22,23 @@ import {
   seasonLabel,
 } from '@/lib/fertilizer-schedule';
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
-import { deletePlantImageFromStorage, uploadPlantImage } from '@/lib/storage-upload';
+import { uploadPlantImage } from '@/lib/storage-upload';
 import { datetimeLocalToIsoUtc, defaultPhotoTimelineFromFile, toDatetimeLocalValue } from '@/lib/photo-timeline';
 import { buildPlantTroubleshootingPrompt } from '@/lib/plant-ai-prompt';
+import { markFertilizedAction, markWateredAction } from '@/app/actions/garden';
+import {
+  addPlantNoteEntryAction,
+  addPlantTimelinePhotoAction,
+  deleteUploadedPlantPhotoByUrlAction,
+  deletePlantNoteEntryAction,
+  deletePlantPhotoAction,
+  saveFertilizerScheduleAction,
+  saveFertilizerSettingsAction,
+  savePlantHeaderFieldsAction,
+  saveWateringSettingsAction,
+  setPlantProfilePhotoAction,
+  updatePhotoTimelineDateAction,
+} from '@/app/actions/plant-profile';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -199,14 +210,6 @@ function matchLocationPreset(location: string | null | undefined): { preset: str
   return { preset: HEADER_LOCATION_OTHER, custom: t };
 }
 
-/** PostgREST: unknown column in payload (schema behind repo migrations). */
-function isSchemaColumnMissingError(error: { code?: string; message?: string | null } | null): boolean {
-  if (!error) return false;
-  if (error.code === 'PGRST204') return true;
-  const m = error.message ?? '';
-  return m.includes('Could not find the') && m.includes('column');
-}
-
 export default function PlantProfile() {
   const params = useParams();
   const router = useRouter();
@@ -347,28 +350,24 @@ export default function PlantProfile() {
       setPlant(merged);
       setHeaderSaveBusy(true);
       try {
-        const { error: coreError } = await supabase
-          .from('plants')
-          .update(plantUpdateCorePayload(merged))
-          .eq('id', plantId);
-        if (coreError) throw coreError;
+        const result = await savePlantHeaderFieldsAction({
+          plantId,
+          containerType: merged.container_type,
+          potSize: merged.pot_size,
+          sunExposure: normalizeSunExposure(merged.sun_exposure),
+          locationInGarden: merged.location_in_garden ?? null,
+        });
+        if (!result.ok) {
+          throw new Error(result.error || 'Could not save');
+        }
 
-        const { error: extError } = await supabase
-          .from('plants')
-          .update(plantUpdateExtendedPatch(merged))
-          .eq('id', plantId);
-
-        if (extError) {
-          if (isSchemaColumnMissingError(extError)) {
-            console.warn('plants extended columns missing or outdated schema:', extError.message);
-            toast.success('Saved container & pot', { duration: 2200 });
-            toast.message('Sun / location not synced to database', {
-              description: 'Your Supabase project is missing newer columns (e.g. sun_exposure). Apply repo migrations to plants, then save again.',
-              duration: 8000,
-            });
-          } else {
-            throw extError;
-          }
+        if (result.data.extendedColumnsMissing) {
+          toast.success('Saved container & pot', { duration: 2200 });
+          toast.message('Sun / location not synced to database', {
+            description:
+              'Your Supabase project is missing newer columns (e.g. sun_exposure). Apply repo migrations to plants, then save again.',
+            duration: 8000,
+          });
         } else {
           toast.success('Saved', { duration: 2000 });
         }
@@ -569,31 +568,16 @@ export default function PlantProfile() {
     setPlantNoteEntries((data || []) as PlantNoteEntry[]);
   }, [plantId]);
 
-  const logActivityDb = async (action: string, plantName: string, details?: string | null) => {
-    await supabase.from('activity_logs').insert([
-      {
-        action,
-        plant_name: plantName,
-        details: details ?? null,
-      },
-    ]);
-  };
-
   const markWateredFromProfile = async () => {
     if (!plant || isWriteDisabled) return;
     setCareBusy('water');
     try {
-      const result = await markPlantWateredWithLog({
-        supabase,
-        plantId,
-        plantName: plant.name,
-        lastWatered: plant.last_watered,
-      });
+      const result = await markWateredAction(plantId);
       if (!result.ok) {
         toast.error(result.error || 'Could not update watering');
         return;
       }
-      if (result.alreadyToday) {
+      if (result.data.alreadyToday) {
         toast.info(`${plant.name} is already marked as watered today.`);
         return;
       }
@@ -620,52 +604,16 @@ export default function PlantProfile() {
     }
     setCareBusy('fert');
     try {
-      const { data: logRow, error: logError } = await supabase
-        .from('activity_logs')
-        .insert([{ action: 'Plant Fertilized', plant_name: plant.name }])
-        .select('id, created_at')
-        .single();
-
-      if (logError || !logRow?.created_at) {
-        toast.error(logError?.message ?? 'Failed to record fertilizing');
+      const result = await markFertilizedAction(plantId);
+      if (!result.ok) {
+        toast.error(result.error || 'Could not update fertilizing');
         return;
       }
-
-      const fertilizedDate = format(new Date(logRow.created_at), 'yyyy-MM-dd');
-      const fertilizerFrequencyDays = normalizeFertilizerFrequencyDays(plant.fertilizer_frequency_days, 30);
-
-      const { data: updated, error: plantError } = await supabase
-        .from('plants')
-        .update({ last_fertilized: fertilizedDate })
-        .eq('id', plantId)
-        .select('id');
-
-      if (plantError || !updated?.length) {
-        await supabase.from('activity_logs').delete().eq('id', logRow.id);
-        toast.error(plantError?.message ?? 'Could not save fertilizer date');
-        await fetchActivities(plant.name);
+      if (result.data.alreadyToday) {
+        toast.info(`${result.data.name} is already marked as fertilized today.`);
         return;
       }
-
-      const { error: activityUpdateError } = await supabase
-        .from('activity_logs')
-        .update({
-          details: `Last fertilized on this plant’s record is now ${formatCareDay(fertilizedDate)}. ${fertilizerCadenceSentence(
-            fertilizerFrequencyDays,
-          )}`,
-        })
-        .eq('id', logRow.id);
-      if (activityUpdateError) {
-        console.warn('activity_logs update:', activityUpdateError.message);
-      }
-
       toast.success(`${plant.name} fertilized`);
-      const { error: fertLogErr } = await supabase.from('fertilizer_logs').insert({
-        plant_id: plantId,
-        applied_on: fertilizedDate,
-        notes: null,
-      });
-      if (fertLogErr) console.warn('fertilizer_logs insert:', fertLogErr);
       await fetchPlant();
       await fetchFertilizerLogs();
       await fetchActivities(plant.name);
@@ -681,14 +629,12 @@ export default function PlantProfile() {
     if (!plant || isWriteDisabled) return;
     setFertSettingsBusy(true);
     try {
-      const { error } = await supabase
-        .from('plants')
-        .update({
-          fertilizer_seasons: normalizeFertilizerSeasons(fertDraft.seasons),
-          fertilizer_notes: fertDraft.notes.trim() || null,
-        })
-        .eq('id', plantId);
-      if (error) throw error;
+      const result = await saveFertilizerSettingsAction({
+        plantId,
+        seasons: fertDraft.seasons,
+        notes: fertDraft.notes,
+      });
+      if (!result.ok) throw new Error(result.error || 'Could not save fertilizer settings');
       toast.success('Fertilizer seasons and notes saved');
       await fetchPlant();
     } catch (e) {
@@ -708,23 +654,18 @@ export default function PlantProfile() {
     }
     setFertScheduleBusy(true);
     try {
-      const { error } = await supabase
-        .from('plants')
-        .update({
-          fertilizer_frequency_days: parsedDays,
-          last_fertilized: fertScheduleDraft.lastFertilized.trim() || null,
-        })
-        .eq('id', plantId);
-      if (error) throw error;
-      await logActivityDb(
-        'Fertilizer Schedule Updated',
-        plant.name,
-        `${fertilizerCadenceSentence(parsedDays)} Last fertilized date is ${
+      const result = await saveFertilizerScheduleAction({
+        plantId,
+        frequencyDays: parsedDays,
+        lastFertilized: fertScheduleDraft.lastFertilized.trim() || null,
+        plantName: plant.name,
+        details: `${fertilizerCadenceSentence(parsedDays)} Last fertilized date is ${
           fertScheduleDraft.lastFertilized.trim()
             ? formatCareDay(fertScheduleDraft.lastFertilized.trim())
             : 'not set'
         }.`,
-      );
+      });
+      if (!result.ok) throw new Error(result.error || 'Could not save fertilizer schedule');
       toast.success('Fertilizer schedule saved');
       await fetchPlant();
       await fetchActivities(plant.name);
@@ -745,8 +686,8 @@ export default function PlantProfile() {
     }
     setNoteAddBusy(true);
     try {
-      const { error } = await supabase.from('plant_note_entries').insert({ plant_id: plantId, body });
-      if (error) throw error;
+      const result = await addPlantNoteEntryAction({ plantId, body });
+      if (!result.ok) throw new Error(result.error || 'Could not add note');
       setNewNoteText('');
       toast.success('Note added');
       await fetchPlantNoteEntries();
@@ -763,12 +704,8 @@ export default function PlantProfile() {
     if (!confirm('Delete this note? This cannot be undone.')) return;
     setDeletingNoteId(entryId);
     try {
-      const { error } = await supabase
-        .from('plant_note_entries')
-        .delete()
-        .eq('id', entryId)
-        .eq('plant_id', plantId);
-      if (error) throw error;
+      const result = await deletePlantNoteEntryAction({ plantId, entryId });
+      if (!result.ok) throw new Error(result.error || 'Could not delete note');
       toast.success('Note deleted');
       await fetchPlantNoteEntries();
     } catch (e) {
@@ -838,14 +775,12 @@ export default function PlantProfile() {
     }
     setWateringSettingsBusy(true);
     try {
-      const { error } = await supabase
-        .from('plants')
-        .update({
-          watering_frequency_days: parsedDays,
-          last_watered: wateringDraft.lastWatered.trim() || null,
-        })
-        .eq('id', plantId);
-      if (error) throw error;
+      const result = await saveWateringSettingsAction({
+        plantId,
+        wateringFrequencyDays: parsedDays,
+        lastWatered: wateringDraft.lastWatered.trim() || null,
+      });
+      if (!result.ok) throw new Error(result.error || 'Could not save watering settings');
       toast.success('Watering schedule saved');
       await fetchPlant();
     } catch (e) {
@@ -887,18 +822,8 @@ export default function PlantProfile() {
 
   /** Only clears plants.photo_url if it still matches (safe for concurrent/bulk deletes). */
   const deletePhotoFromDbAndStorage = async (photoId: string, photoUrl: string) => {
-    const storageError = await deletePlantImageFromStorage(photoUrl);
-    if (storageError) {
-      console.error('Storage delete failed:', storageError);
-      throw new Error('storage');
-    }
-    const { error: dbError } = await supabase.from('plant_photos').delete().eq('id', photoId);
-    if (dbError) throw dbError;
-    await supabase
-      .from('plants')
-      .update({ photo_url: null })
-      .eq('id', plantId)
-      .eq('photo_url', photoUrl);
+    const result = await deletePlantPhotoAction({ plantId, photoId, photoUrl });
+    if (!result.ok) throw new Error(result.error || 'Could not delete photo');
   };
 
   const deletePhoto = async (photoId: string, photoUrl: string) => {
@@ -961,12 +886,12 @@ export default function PlantProfile() {
     }
     setPhotoDateSaving(true);
     try {
-      const { error } = await supabase
-        .from('plant_photos')
-        .update({ created_at: iso })
-        .eq('id', photoDateDialog.id)
-        .eq('plant_id', plantId);
-      if (error) throw error;
+      const result = await updatePhotoTimelineDateAction({
+        plantId,
+        photoId: photoDateDialog.id,
+        createdAtIso: iso,
+      });
+      if (!result.ok) throw new Error(result.error || 'Could not update photo date');
       toast.success('Photo date updated');
       setPhotoDateDialog(null);
       await fetchPhotos();
@@ -990,16 +915,16 @@ export default function PlantProfile() {
         return;
       }
       const createdIso = datetimeLocalToIsoUtc(defaultPhotoTimelineFromFile(file));
-      const { error } = await supabase.from('plant_photos').insert({
-        plant_id: plantId,
-        photo_url: photoUrl,
-        ...(createdIso ? { created_at: createdIso } : {}),
+      const result = await addPlantTimelinePhotoAction({
+        plantId,
+        photoUrl,
+        createdAtIso: createdIso,
+        plantName: plant.name,
       });
-      if (error) {
-        await deletePlantImageFromStorage(photoUrl);
-        throw error;
+      if (!result.ok) {
+        await deleteUploadedPlantPhotoByUrlAction(photoUrl);
+        throw new Error(result.error || 'Could not add photo');
       }
-      await logActivityDb('Photo Added', plant.name);
       toast.success('Photo added to history');
       await fetchPhotos();
       await fetchActivities(plant.name);
@@ -1015,8 +940,8 @@ export default function PlantProfile() {
   const setAsProfilePicture = async (photoUrl: string) => {
     setSettingProfileForUrl(photoUrl);
     try {
-      const { error } = await supabase.from('plants').update({ photo_url: photoUrl }).eq('id', plantId);
-      if (error) throw error;
+      const result = await setPlantProfilePhotoAction({ plantId, photoUrl });
+      if (!result.ok) throw new Error(result.error || 'Could not set profile picture');
       setPlant((prev) => (prev ? { ...prev, photo_url: photoUrl } : null));
       toast.success('Profile picture updated');
     } catch (err) {
