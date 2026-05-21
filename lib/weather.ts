@@ -1,12 +1,19 @@
-import { addDays, isValid } from 'date-fns';
+import { addDays, isValid, parseISO, startOfDay } from 'date-fns';
 import type { Plant } from '@/lib/plant-types';
 
+/** Laveen, AZ — shared with dashboard weather in fetchWeatherAction */
+export const LAVEEN_LATITUDE = 33.3625;
+export const LAVEEN_LONGITUDE = -112.1695;
+
 const FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
-const FORECAST_CACHE_KEY = 'laveen-phoenix-forecast-v1';
+const FORECAST_CACHE_KEY = 'laveen-phoenix-forecast-v2';
 const FORECAST_DAY_COUNT = 5;
 
+/** ~0.04 in — model drizzle below this should not trigger a rain delay */
+export const MEASURABLE_PRECIPITATION_MM = 1.0;
+
 const OPEN_METEO_FORECAST_URL =
-  'https://api.open-meteo.com/v1/forecast?latitude=33.3776&longitude=-112.0838&timezone=America/Phoenix&temperature_unit=fahrenheit&daily=temperature_2m_max,precipitation_sum';
+  `https://api.open-meteo.com/v1/forecast?latitude=${LAVEEN_LATITUDE}&longitude=${LAVEEN_LONGITUDE}&timezone=America/Phoenix&temperature_unit=fahrenheit&daily=temperature_2m_max,precipitation_sum`;
 
 export type ForecastDay = {
   date: string;
@@ -138,13 +145,28 @@ function baseWateringDueDate(plant: Plant): Date {
   return addDays(new Date(), frequency);
 }
 
+/** Rain delay only when measurable precip is forecast on or before the plant's due date */
+export function hasMeasurableRainNearDueDate(forecast: Forecast, baseDueDate: Date): boolean {
+  const today = startOfDay(new Date());
+  const due = startOfDay(baseDueDate);
+  const windowEnd = due < today ? today : due;
+
+  return forecast.days.some((day) => {
+    const dayDate = parseISO(day.date);
+    if (!isValid(dayDate)) return false;
+    const d = startOfDay(dayDate);
+    if (d < today || d > windowEnd) return false;
+    return day.precipitationSum >= MEASURABLE_PRECIPITATION_MM;
+  });
+}
+
 export function calculateWateringAdjustment(
   plant: Plant,
   forecast: Forecast,
 ): { adjustedDueDate: Date; reason: string; daysShift: number } {
   const baseDueDate = baseWateringDueDate(plant);
   const hottestDay = forecast.days.reduce((max, day) => Math.max(max, day.temperatureMax), -Infinity);
-  const hasRain = forecast.days.some((day) => day.precipitationSum > 0);
+  const hasRain = hasMeasurableRainNearDueDate(forecast, baseDueDate);
 
   let heatShift = 0;
   if (hottestDay >= 110) heatShift = -2;

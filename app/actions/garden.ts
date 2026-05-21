@@ -22,6 +22,7 @@ import {
 import { sunExposureLabel } from '@/lib/plant-types';
 import { datetimeLocalToIsoUtc } from '@/lib/photo-timeline';
 import { format, isValid, parseISO } from 'date-fns';
+import { LAVEEN_LATITUDE, LAVEEN_LONGITUDE } from '@/lib/weather';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 type ClientCareDay = {
@@ -65,12 +66,20 @@ function isPlantCareDateInClientDay(
   return parsed >= clientCareDay.start && parsed < clientCareDay.end;
 }
 
+function isRainWeatherCode(code: number): boolean {
+  return (code >= 51 && code <= 67) || (code >= 80 && code <= 82);
+}
+
+function isSnowWeatherCode(code: number): boolean {
+  return (code >= 71 && code <= 77) || (code >= 85 && code <= 86);
+}
+
 function getWeatherCondition(code: number): string {
   if (code === 0) return 'Sunny';
   if (code <= 3) return 'Cloudy';
   if (code <= 48) return 'Fog';
-  if (code <= 67 || code <= 82) return 'Rain';
-  if (code <= 86) return 'Snow';
+  if (isRainWeatherCode(code)) return 'Rain';
+  if (isSnowWeatherCode(code)) return 'Snow';
   return 'Cloudy';
 }
 
@@ -78,8 +87,8 @@ function getWeatherIcon(code: number): string {
   if (code === 0) return '☀️';
   if (code <= 3) return '⛅';
   if (code <= 48) return '🌫️';
-  if (code <= 67 || code <= 82) return '🌧️';
-  if (code <= 86) return '❄️';
+  if (isRainWeatherCode(code)) return '🌧️';
+  if (isSnowWeatherCode(code)) return '❄️';
   return '☁️';
 }
 
@@ -154,7 +163,7 @@ export async function fetchActivitiesAction(): Promise<ActionResult<Activity[]>>
 
 export async function fetchWeatherAction(): Promise<ActionResult<GardenWeather | null>> {
   const url =
-    'https://api.open-meteo.com/v1/forecast?latitude=33.3625&longitude=-112.1695' +
+    `https://api.open-meteo.com/v1/forecast?latitude=${LAVEEN_LATITUDE}&longitude=${LAVEEN_LONGITUDE}` +
     '&current=temperature_2m,wind_speed_10m,weather_code' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
     '&temperature_unit=fahrenheit&timezone=America/Phoenix';
@@ -165,9 +174,7 @@ export async function fetchWeatherAction(): Promise<ActionResult<GardenWeather |
     const daily = data?.daily;
     if (!current || !daily?.time?.length) return { ok: true, data: null };
 
-    let condition = 'Sunny';
-    if (current.weather_code >= 51) condition = 'Rain';
-    else if (current.weather_code >= 3) condition = 'Cloudy';
+    const condition = getWeatherCondition(current.weather_code);
 
     return {
       ok: true,
