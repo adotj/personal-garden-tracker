@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import type { FertilizerSeason, FertilizerLogRow, Plant, PlantNoteEntry, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
+import { plantEnvironmentLabel } from '@/lib/plant-environment';
 import {
   formatPlantCareInstant,
   isoOrDateToDateInputValue,
@@ -1086,11 +1087,20 @@ export default function PlantProfile() {
       <header className="sticky top-0 z-50 bg-desert-parchment/95 backdrop-blur border-b border-desert-border">
         <div className="max-w-4xl mx-auto px-6 py-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push(`/?zone=${plant.environment}`)}
+            >
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="min-w-0 flex-1">
-              <h1 className="text-3xl font-bold text-oasis">{plant.name}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-3xl font-bold text-oasis">{plant.name}</h1>
+                <Badge variant="outline" className="border-desert-border text-desert-sage">
+                  {plantEnvironmentLabel(plant.environment)}
+                </Badge>
+              </div>
               {!headerEditMode || isWriteDisabled ? (
                 <div
                   className="mt-1 flex flex-wrap items-center gap-2"

@@ -2,6 +2,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import type { ActionResult, Activity, AddPlantInput, GardenWeather, UpdatePlantInput } from '@/lib/garden-types';
+import type { PlantEnvironment } from '@/lib/plant-environment';
 import type { Plant } from '@/lib/plant-types';
 import {
   formatPlantCareInstant,
@@ -227,6 +228,7 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
       .from('plants')
       .update(
         plantInsertExtendedPatch({
+          environment: input.environment,
           sun_exposure: input.plant.sun_exposure,
           fertilizer_frequency_days: fertilizerFrequencyDays,
           fertilizer_seasons: seasons,
@@ -416,11 +418,15 @@ export async function markSelectedTodayPlantsWateredAction(
 
 export async function markAllWateredTodayAction(
   clientCareDay?: ClientCareDay,
+  environment: PlantEnvironment = 'outdoor',
 ): Promise<ActionResult<{ when: string; total: number }>> {
   try {
     const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const supabase = await createSupabaseServerClient();
-    const { data: rows, error: rowsErr } = await supabase.from('plants').select('id, last_watered');
+    const { data: rows, error: rowsErr } = await supabase
+      .from('plants')
+      .select('id, last_watered')
+      .eq('environment', environment);
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load plants' };
     if (rows.length === 0) return { ok: false, error: 'No plants to update yet.' };
     const alreadyWatered = rows.filter((row) =>
@@ -430,9 +436,17 @@ export async function markAllWateredTodayAction(
       return { ok: false, error: 'All plants are already marked watered today.' };
     }
     const when = wateringLoggedAtIso();
-    const { error } = await supabase.from('plants').update({ last_watered: when });
+    const { error } = await supabase
+      .from('plants')
+      .update({ last_watered: when })
+      .eq('environment', environment);
     if (error) return { ok: false, error: error.message || 'Could not apply rainy day watering' };
-    await logActivity('Rainy Day', undefined, `Set last watered to ${formatPlantCareInstant(when, 'profile')} for all ${rows.length} plants.`);
+    const zoneLabel = environment === 'indoor' ? 'indoor' : 'outdoor';
+    await logActivity(
+      'Rainy Day',
+      undefined,
+      `Set last watered to ${formatPlantCareInstant(when, 'profile')} for all ${rows.length} ${zoneLabel} plants.`,
+    );
     return { ok: true, data: { when, total: rows.length } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not apply rainy day watering' };

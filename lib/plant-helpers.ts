@@ -1,4 +1,5 @@
 import { format, isSameDay, isValid, parseISO } from 'date-fns';
+import { normalizePlantEnvironment, type PlantEnvironment } from '@/lib/plant-environment';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { normalizeFertilizerFrequencyDays, normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
 
@@ -60,6 +61,7 @@ export function normalizeSunExposure(raw: unknown): SunExposure {
 export function normalizePlantRow(row: Plant): Plant {
   return {
     ...row,
+    environment: normalizePlantEnvironment(row.environment),
     watering_frequency_days: Number(row.watering_frequency_days) || 7,
     fertilizer_frequency_days: normalizeFertilizerFrequencyDays(row.fertilizer_frequency_days, 30),
     last_watered: row.last_watered ?? null,
@@ -92,6 +94,7 @@ export function plantUpdateCorePayload(p: Plant) {
 /** Columns added by newer migrations; apply as best-effort patch after core update. */
 export function plantUpdateExtendedPatch(p: Plant) {
   return {
+    environment: normalizePlantEnvironment(p.environment),
     sun_exposure: normalizeSunExposure(p.sun_exposure),
     fertilizer_frequency_days: p.fertilizer_frequency_days,
     fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
@@ -135,6 +138,7 @@ export function plantInsertCorePayload(input: {
 
 /** Sun + fertilizer columns from later migrations — best-effort `.update()` after insert. */
 export function plantInsertExtendedPatch(input: {
+  environment: PlantEnvironment;
   sun_exposure: SunExposure | null | undefined;
   fertilizer_frequency_days: number;
   fertilizer_seasons: FertilizerSeason[] | null | undefined;
@@ -142,6 +146,7 @@ export function plantInsertExtendedPatch(input: {
   location_in_garden?: string | null;
 }) {
   return {
+    environment: normalizePlantEnvironment(input.environment),
     sun_exposure: normalizeSunExposure(input.sun_exposure),
     fertilizer_frequency_days: input.fertilizer_frequency_days,
     fertilizer_seasons: normalizeFertilizerSeasons(input.fertilizer_seasons),

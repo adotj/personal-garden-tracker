@@ -1,3 +1,5 @@
+import type { PlantEnvironment } from '@/lib/plant-environment';
+
 export type FertilizerSeason = 'winter' | 'spring' | 'summer' | 'fall';
 
 /** Where the container sits — important for desert heat / scorch */
@@ -31,8 +33,12 @@ export function sunExposureLabel(v: string | null | undefined): string {
   return found?.label ?? 'Full sun';
 }
 
+export type { PlantEnvironment } from '@/lib/plant-environment';
+
 export type Plant = {
   id: string;
+  /** Outdoor garden vs indoor houseplants — profiles stay in separate tabs */
+  environment: PlantEnvironment;
   name: string;
   species?: string;
   container_type: string;

@@ -21,3 +21,7 @@ ALTER TABLE public.plants
 
 ALTER TABLE public.plants
   ADD COLUMN IF NOT EXISTS location_in_garden text;
+
+ALTER TABLE public.plants
+  ADD COLUMN IF NOT EXISTS environment text NOT NULL DEFAULT 'outdoor'
+  CHECK (environment IN ('indoor', 'outdoor'));

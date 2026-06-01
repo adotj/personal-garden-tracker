@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import type { PlantEnvironment } from '@/lib/plant-environment';
+import { normalizePlantEnvironment, plantEnvironmentLabel } from '@/lib/plant-environment';
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS } from '@/lib/plant-types';
 import {
@@ -72,15 +74,25 @@ function dateInputToday(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-function createDefaultNewPlant(): NewPlantForm {
+function readInitialEnvironment(): PlantEnvironment {
+  if (typeof window === 'undefined') return 'outdoor';
+  const fromUrl = new URLSearchParams(window.location.search).get('zone');
+  if (fromUrl === 'indoor' || fromUrl === 'outdoor') return fromUrl;
+  const saved = localStorage.getItem('gardenZone');
+  if (saved === 'indoor' || saved === 'outdoor') return saved;
+  return 'outdoor';
+}
+
+function createDefaultNewPlant(environment: PlantEnvironment = 'outdoor'): NewPlantForm {
   const today = dateInputToday();
+  const isIndoor = environment === 'indoor';
   return {
     name: '',
     species: '',
-    container_type: 'Grow Bag',
-    pot_size: '10 gallon',
-    sun_exposure: 'full_sun',
-    watering_frequency_days: 3,
+    container_type: isIndoor ? 'Pot' : 'Grow Bag',
+    pot_size: isIndoor ? '6 inch' : '10 gallon',
+    sun_exposure: isIndoor ? 'partial_shade' : 'full_sun',
+    watering_frequency_days: isIndoor ? 7 : 3,
     last_watered: today,
     fertilizer_frequency_days: 30,
     last_fertilized: today,
@@ -113,6 +125,7 @@ export function GardenPageClient() {
   const [bulkWateringTodayBusy, setBulkWateringTodayBusy] = useState(false);
   const [desertPresetSearch, setDesertPresetSearch] = useState('');
   const [desertPresetFilter, setDesertPresetFilter] = useState<DesertPresetFilter>('All');
+  const [activeEnvironment, setActiveEnvironment] = useState<PlantEnvironment>('outdoor');
   const editPhotoBaselineRef = useRef<string | null>(null);
   const lastScrollYRef = useRef(0);
 
@@ -120,7 +133,7 @@ export function GardenPageClient() {
   const { activities, setActivities, fetchActivities } = useActivities();
   const { weather, loadWeather } = useWeather();
 
-  const [newPlant, setNewPlant] = useState<NewPlantForm>(createDefaultNewPlant);
+  const [newPlant, setNewPlant] = useState<NewPlantForm>(() => createDefaultNewPlant('outdoor'));
   const [editWaterDays, setEditWaterDays] = useState('');
   const [editFertDays, setEditFertDays] = useState('');
   const [newPreviewUrl, setNewPreviewUrl] = useState<string | null>(null);
@@ -155,6 +168,28 @@ export function GardenPageClient() {
     setDarkMode(savedDark);
     if (savedDark) document.documentElement.classList.add('dark');
   }, []);
+
+  useEffect(() => {
+    const zone = readInitialEnvironment();
+    setActiveEnvironment(zone);
+    setNewPlant(createDefaultNewPlant(zone));
+  }, []);
+
+  const handleEnvironmentChange = useCallback((zone: PlantEnvironment) => {
+    setActiveEnvironment(zone);
+    setPlantSearch('');
+    setFertDueThisMonthOnly(false);
+    setDesertPresetSearch('');
+    setDesertPresetFilter('All');
+    if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
+    setNewPreviewUrl(null);
+    setNewPlant(createDefaultNewPlant(zone));
+    setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
+    localStorage.setItem('gardenZone', zone);
+    const url = new URL(window.location.href);
+    url.searchParams.set('zone', zone);
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+  }, [newPreviewUrl]);
 
   useEffect(() => {
     let isMounted = true;
@@ -272,13 +307,18 @@ export function GardenPageClient() {
 
   const isWriteDisabled = false;
 
+  const zonePlants = useMemo(
+    () => plants.filter((p) => normalizePlantEnvironment(p.environment) === activeEnvironment),
+    [plants, activeEnvironment],
+  );
+
   const plantSearchNorm = plantSearch.trim().toLowerCase();
   const filteredPlants = useMemo(() => {
-    let list = plants;
+    let list = zonePlants;
     if (plantSearchNorm) list = list.filter((p) => p.name.toLowerCase().includes(plantSearchNorm));
     if (fertDueThisMonthOnly) list = list.filter((p) => needsFertilizerThisMonth(p));
     return list;
-  }, [plants, plantSearchNorm, fertDueThisMonthOnly]);
+  }, [zonePlants, plantSearchNorm, fertDueThisMonthOnly]);
   const desertPresetSearchNorm = desertPresetSearch.trim().toLowerCase();
   const filteredDesertPresets = useMemo(() => {
     return desertPlantPresets.filter((preset) => {
@@ -298,7 +338,18 @@ export function GardenPageClient() {
     });
   }, [desertPresetFilter, desertPresetSearchNorm]);
 
-  const totalPlantCount = plants.length;
+  const totalPlantCount = zonePlants.length;
+  const zonePlantNames = useMemo(() => new Set(zonePlants.map((p) => p.name)), [zonePlants]);
+  const zoneActivities = useMemo(
+    () =>
+      activities.filter((activity) => {
+        if (!activity.plant_name?.trim()) {
+          return activeEnvironment === 'outdoor';
+        }
+        return zonePlantNames.has(activity.plant_name);
+      }),
+    [activities, activeEnvironment, zonePlantNames],
+  );
   const showRainyDayButton = useMemo(() => {
     if (!weather?.forecast?.length) return false;
     return weather.forecast.some((day) => day.condition === 'Rain');
@@ -306,7 +357,7 @@ export function GardenPageClient() {
 
   const fertilizerUpcoming = useMemo(() => {
     const now = new Date();
-    return plants
+    return zonePlants
       .map((plant) => ({
         plant,
         urgency: fertilizerUrgency(plant, now),
@@ -321,15 +372,15 @@ export function GardenPageClient() {
         const tb = b.next?.getTime() ?? 0;
         return ta - tb;
       });
-  }, [plants]);
+  }, [zonePlants]);
 
   const allPlantNamesCsv = useMemo(
-    () => plants.map((plant) => toCsvCell(plant.name.trim())).join(', '),
-    [plants],
+    () => zonePlants.map((plant) => toCsvCell(plant.name.trim())).join(', '),
+    [zonePlants],
   );
 
   const copyAllPlantNames = async () => {
-    if (plants.length === 0) {
+    if (zonePlants.length === 0) {
       toast.info('No plant names to copy yet.');
       return;
     }
@@ -337,7 +388,7 @@ export function GardenPageClient() {
     try {
       await navigator.clipboard.writeText(allPlantNamesCsv);
       toast.success(
-        `Copied ${plants.length} plant name${plants.length === 1 ? '' : 's'} to clipboard.`,
+        `Copied ${zonePlants.length} plant name${zonePlants.length === 1 ? '' : 's'} to clipboard.`,
       );
     } catch {
       toast.error('Could not copy plant names from this browser.');
@@ -418,7 +469,7 @@ export function GardenPageClient() {
     }
     setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
     setNewPlant({
-      ...createDefaultNewPlant(),
+      ...createDefaultNewPlant(activeEnvironment),
       name: preset.name,
       species: preset.species,
       container_type: preset.container_type,
@@ -454,6 +505,7 @@ export function GardenPageClient() {
       newPlant.fertilizer_seasons?.length > 0 ? newPlant.fertilizer_seasons : [...ALL_FERTILIZER_SEASONS];
 
     const result = await addPlantAction({
+      environment: activeEnvironment,
       plant: {
         name: newPlant.name,
         container_type: newPlant.container_type,
@@ -479,7 +531,7 @@ export function GardenPageClient() {
     toast.success('Plant added successfully! 🌱');
     if (newPreviewUrl) URL.revokeObjectURL(newPreviewUrl);
     setIsAddModalOpen(false);
-    setNewPlant(createDefaultNewPlant());
+    setNewPlant(createDefaultNewPlant(activeEnvironment));
     setDesertPresetSearch('');
     setDesertPresetFilter('All');
     setNewPreviewUrl(null);
@@ -557,7 +609,7 @@ export function GardenPageClient() {
       return false;
     }
 
-    const selectedPlants = plants.filter((plant) => plantIds.includes(plant.id));
+    const selectedPlants = zonePlants.filter((plant) => plantIds.includes(plant.id));
     if (selectedPlants.length === 0) {
       toast.info('Select at least one plant due today.');
       return false;
@@ -585,12 +637,18 @@ export function GardenPageClient() {
 
   const markAllWateredToday = async () => {
     if (isWriteDisabled) return;
-    const result = await markAllWateredTodayAction(currentClientCareDay());
+    const result = await markAllWateredTodayAction(currentClientCareDay(), activeEnvironment);
     if (!result.ok) {
       toast.info(result.error || 'Could not apply rainy day watering');
       return;
     }
-    setPlants((prev) => prev.map((plant) => ({ ...plant, last_watered: result.data.when })));
+    setPlants((prev) =>
+      prev.map((plant) =>
+        normalizePlantEnvironment(plant.environment) === activeEnvironment
+          ? { ...plant, last_watered: result.data.when }
+          : plant,
+      ),
+    );
     toast.success(`🌧️ Rainy day applied — ${result.data.total} plants marked watered today.`);
     await fetchActivities();
   };
@@ -730,6 +788,8 @@ export function GardenPageClient() {
       )}
 
       <GardenHeader
+        activeEnvironment={activeEnvironment}
+        onEnvironmentChange={handleEnvironmentChange}
         darkMode={darkMode}
         isDemoMode={isDemoMode}
         isGardenHeaderCollapsed={isGardenHeaderCollapsed}
@@ -737,7 +797,7 @@ export function GardenPageClient() {
         fertDueThisMonthOnly={fertDueThisMonthOnly}
         onToggleFertDueThisMonthOnly={() => setFertDueThisMonthOnly((v) => !v)}
         onCopyAllPlantNames={copyAllPlantNames}
-        copyNamesDisabled={plants.length === 0}
+        copyNamesDisabled={zonePlants.length === 0}
         plantSearch={plantSearch}
         onPlantSearchChange={setPlantSearch}
         onClearPlantSearch={() => setPlantSearch('')}
@@ -752,10 +812,12 @@ export function GardenPageClient() {
             </DialogTrigger>
             <DialogContent className="max-h-[min(92vh,720px)] w-full max-w-[95vw] overflow-x-hidden overflow-y-auto p-3 sm:max-w-lg sm:p-4">
               <DialogHeader>
-                <DialogTitle className="text-oasis">Add New Plant</DialogTitle>
+                <DialogTitle className="text-oasis">
+                  Add New {plantEnvironmentLabel(activeEnvironment)} Plant
+                </DialogTitle>
               </DialogHeader>
               <form onSubmit={addPlant} className="flex w-full flex-col space-y-4 overflow-x-hidden sm:space-y-5">
-                {/* Added: desert quick-add library (searchable, category-filtered). */}
+                {activeEnvironment === 'outdoor' ? (
                 <div className="w-full max-w-full space-y-3 overflow-hidden rounded-2xl border border-desert-border bg-desert-parchment/70 px-3 py-3 shadow-sm sm:px-4 sm:py-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Label className="text-sm font-semibold text-oasis">Quick Add from Desert Library</Label>
@@ -818,6 +880,7 @@ export function GardenPageClient() {
                     )}
                   </div>
                 </div>
+                ) : null}
                 <div>
                   <Label>Plant Name</Label>
                   <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
@@ -995,15 +1058,17 @@ export function GardenPageClient() {
       />
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        <GardenWeather
-          weather={weather}
-          showRainyDayButton={showRainyDayButton}
-          onMarkAllWateredToday={markAllWateredToday}
-          rainyDayDisabled={isDemoMode || plants.length === 0}
-        />
-        <PushNotificationCard isDemoMode={isDemoMode} plantCount={plants.length} />
+        {activeEnvironment === 'outdoor' ? (
+          <GardenWeather
+            weather={weather}
+            showRainyDayButton={showRainyDayButton}
+            onMarkAllWateredToday={markAllWateredToday}
+            rainyDayDisabled={isDemoMode || zonePlants.length === 0}
+          />
+        ) : null}
+        <PushNotificationCard isDemoMode={isDemoMode} plantCount={zonePlants.length} />
 
-        {plants.length > 0 && fertilizerUpcoming.length > 0 ? (
+        {zonePlants.length > 0 && fertilizerUpcoming.length > 0 ? (
           <Card className="mb-10 border-amber-700/30 bg-gradient-to-br from-amber-50/90 to-desert-parchment dark:from-amber-950/40 dark:to-zinc-900 dark:border-amber-900/40">
             <CardHeader className="pb-2">
               <button
@@ -1082,9 +1147,9 @@ export function GardenPageClient() {
           </Card>
         ) : null}
 
-        {plants.length > 0 ? (
+        {zonePlants.length > 0 ? (
           <WateringCalendar
-            plants={plants}
+            plants={zonePlants}
             numDays={3}
             onMarkTodayPlantsWatered={markSelectedTodayPlantsWatered}
             bulkActionDisabled={isDemoMode}
@@ -1092,11 +1157,12 @@ export function GardenPageClient() {
           />
         ) : null}
 
-        {plants.length === 0 ? (
+        {zonePlants.length === 0 ? (
           <Card className="mb-16 rounded-3xl border border-desert-border bg-desert-parchment">
             <CardContent className="py-16 text-center">
               <p className="text-lg text-desert-sage">
-                No plants yet. Add your first plant with <span className="font-medium text-oasis">New Plant</span>.
+                No {activeEnvironment === 'indoor' ? 'indoor' : 'outdoor'} plants yet. Add your first with{' '}
+                <span className="font-medium text-oasis">New Plant</span>.
               </p>
             </CardContent>
           </Card>
@@ -1141,7 +1207,7 @@ export function GardenPageClient() {
         )}
 
         <ActivityLog
-          activities={activities}
+          activities={zoneActivities}
           isDemoMode={isDemoMode}
           onClearActivityLog={clearActivityLog}
         />

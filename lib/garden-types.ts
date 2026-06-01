@@ -1,4 +1,4 @@
-import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
+import type { FertilizerSeason, Plant, PlantEnvironment, SunExposure } from '@/lib/plant-types';
 
 export type Activity = {
   id: string;
@@ -40,6 +40,7 @@ export type NewPlantForm = {
 };
 
 export type AddPlantInput = {
+  environment: PlantEnvironment;
   plant: {
     name: string;
     container_type: string;

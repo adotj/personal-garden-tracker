@@ -5,9 +5,13 @@ import { cn } from '@/lib/utils';
 import type { GardenWeather } from '@/lib/garden-types';
 import { usdaHardinessZoneLabel } from '@/lib/garden-site';
 import { Button } from '@/components/ui/button';
-import { CalendarRange, Copy, Droplet, Moon, Search, Sun, Sun as SunIcon, X } from 'lucide-react';
+import type { PlantEnvironment } from '@/lib/plant-environment';
+import { plantEnvironmentEmoji, plantEnvironmentLabel } from '@/lib/plant-environment';
+import { CalendarRange, Copy, Droplet, Home, Moon, Search, Sun, Sun as SunIcon, TreePine, X } from 'lucide-react';
 
 type GardenHeaderProps = {
+  activeEnvironment: PlantEnvironment;
+  onEnvironmentChange: (environment: PlantEnvironment) => void;
   darkMode: boolean;
   isDemoMode: boolean;
   isGardenHeaderCollapsed: boolean;
@@ -32,6 +36,8 @@ type GardenWeatherProps = {
 };
 
 export function GardenHeader({
+  activeEnvironment,
+  onEnvironmentChange,
   darkMode,
   isDemoMode,
   isGardenHeaderCollapsed,
@@ -62,7 +68,7 @@ export function GardenHeader({
               isGardenHeaderCollapsed ? 'text-2xl' : 'text-4xl',
             )}
           >
-            🌵
+            {plantEnvironmentEmoji(activeEnvironment)}
           </span>
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <div
@@ -103,6 +109,40 @@ export function GardenHeader({
         </div>
       </div>
 
+      <div className="max-w-7xl mx-auto border-t border-desert-border/30 px-4 py-2 sm:px-6">
+        <div
+          className="inline-flex w-full max-w-md rounded-full border border-desert-border/60 bg-desert-dune/30 p-1"
+          role="tablist"
+          aria-label="Garden zone"
+        >
+          {(['outdoor', 'indoor'] as const).map((zone) => {
+            const active = activeEnvironment === zone;
+            return (
+              <button
+                key={zone}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors',
+                  active
+                    ? 'bg-oasis text-white shadow-sm'
+                    : 'text-desert-sage hover:text-desert-ink dark:hover:text-desert-ink',
+                )}
+                onClick={() => onEnvironmentChange(zone)}
+              >
+                {zone === 'outdoor' ? (
+                  <TreePine className="h-4 w-4 shrink-0" aria-hidden />
+                ) : (
+                  <Home className="h-4 w-4 shrink-0" aria-hidden />
+                )}
+                {plantEnvironmentLabel(zone)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div
         className={cn(
           'max-w-7xl mx-auto bg-gradient-to-b from-desert-dune/35 to-desert-dune/10 px-4 dark:from-desert-dune/80 dark:to-desert-page/50 sm:px-6 transition-all duration-300 overflow-hidden',
@@ -118,7 +158,8 @@ export function GardenHeader({
               {totalPlantCount}
             </span>
             <span className="text-sm text-desert-sage">
-              {totalPlantCount === 1 ? 'plant' : 'plants'} in your garden
+              {totalPlantCount === 1 ? 'plant' : 'plants'} in your {activeEnvironment === 'indoor' ? 'indoor' : 'outdoor'}{' '}
+              garden
               {isDemoMode ? ' · demo' : ''}
             </span>
           </div>
