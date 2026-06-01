@@ -69,10 +69,10 @@ import {
   MapPin,
 } from 'lucide-react';
 import { format, isValid } from 'date-fns';
-import { addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { calculateWateringAdjustment, fetchPhoenixForecast } from '@/lib/weather';
 import type { Forecast } from '@/lib/weather';
+import { baseWateringDueDate, currentClientCareDay } from '@/lib/watering-schedule';
 
 type PlantPhotoRow = {
   id: string;
@@ -107,14 +107,6 @@ function isFertLogAction(action: string) {
 
 function isFertilizerScheduleLogAction(action: string) {
   return action.toLowerCase().includes('fertilizer schedule');
-}
-
-function waterDueDate(iso: string | null, freqDays: number): Date | null {
-  if (!iso || freqDays < 1) return null;
-  const last = new Date(iso);
-  const due = addDays(last, freqDays);
-  if (!isValid(last) || !isValid(due)) return null;
-  return due;
 }
 
 function formatDueLine(due: Date | null): string {
@@ -572,16 +564,21 @@ export default function PlantProfile() {
     if (!plant || isWriteDisabled) return;
     setCareBusy('water');
     try {
-      const result = await markWateredAction(plantId);
+      const result = await markWateredAction(plantId, currentClientCareDay());
       if (!result.ok) {
         toast.error(result.error || 'Could not update watering');
         return;
       }
       if (result.data.alreadyToday) {
-        toast.info(`${plant.name} is already marked as watered today.`);
-        return;
+        toast.info(`${plant.name} was already watered today — schedule refreshed.`);
+      } else {
+        toast.success(`${plant.name} watered`);
       }
-      toast.success(`${plant.name} watered`);
+      setPlant((prev) => (prev ? { ...prev, last_watered: result.data.when } : prev));
+      setWateringDraft({
+        frequencyDays: String(plant.watering_frequency_days),
+        lastWatered: isoOrDateToDateInputValue(result.data.when),
+      });
       await fetchPlant();
       await fetchActivities(plant.name);
     } catch (e) {
@@ -764,7 +761,15 @@ export default function PlantProfile() {
       frequencyDays: String(plant.fertilizer_frequency_days),
       lastFertilized: isoOrDateToDateInputValue(plant.last_fertilized),
     });
-  }, [plant?.id]);
+  }, [
+    plant?.id,
+    plant?.last_watered,
+    plant?.watering_frequency_days,
+    plant?.last_fertilized,
+    plant?.fertilizer_frequency_days,
+    plant?.fertilizer_seasons,
+    plant?.fertilizer_notes,
+  ]);
 
   const saveWateringSettings = async () => {
     if (!plant || isWriteDisabled) return;
@@ -1029,7 +1034,7 @@ export default function PlantProfile() {
   const fertScheduleDraftMatchesPlant =
     fertScheduleDraft.frequencyDays.trim() === String(plant.fertilizer_frequency_days) &&
     fertScheduleDraft.lastFertilized === isoOrDateToDateInputValue(plant.last_fertilized);
-  const baseWaterDue = waterDueDate(plant.last_watered, plant.watering_frequency_days);
+  const baseWaterDue = baseWateringDueDate(plant.last_watered, plant.watering_frequency_days);
   const wateringAdjustment =
     baseWaterDue && forecast ? calculateWateringAdjustment(plant, forecast) : null;
   const displayedWaterDue = wateringAdjustment?.adjustedDueDate ?? baseWaterDue;

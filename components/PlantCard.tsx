@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import type { Plant } from '@/lib/plant-types';
-import { format, addDays, differenceInDays, isValid } from 'date-fns';
+import { format, differenceInDays, isValid } from 'date-fns';
 import { fertilizerDueSoonOrOverdue, fertilizerUrgency, formatNextFertilizationDue } from '@/lib/fertilizer-schedule';
 import { isPlantCareDateToday } from '@/lib/plant-helpers';
+import { baseWateringDueDate } from '@/lib/watering-schedule';
 import { calculateWateringAdjustment } from '@/lib/weather';
 import type { Forecast } from '@/lib/weather';
 import { cn } from '@/lib/utils';
@@ -13,14 +14,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Droplet, Edit, Sprout, Trash2 } from 'lucide-react';
-
-function wateringDueDate(iso: string | null, freqDays: number): Date | null {
-  if (!iso || freqDays < 1) return null;
-  const last = new Date(iso);
-  const due = addDays(last, freqDays);
-  if (!isValid(last) || !isValid(due)) return null;
-  return due;
-}
 
 function safeFormatDue(due: Date | null): string {
   if (!due || !isValid(due)) return '';
@@ -51,7 +44,7 @@ export function PlantCard({
   onEdit,
   onDelete,
 }: PlantCardProps) {
-  const baseDueDate = wateringDueDate(plant.last_watered, plant.watering_frequency_days);
+  const baseDueDate = baseWateringDueDate(plant.last_watered, plant.watering_frequency_days);
   const wateringAdjustment = baseDueDate && forecast ? calculateWateringAdjustment(plant, forecast) : null;
   const displayDueDate = wateringAdjustment?.adjustedDueDate ?? baseDueDate;
   const showWaterDue = waterDueSoon(displayDueDate);

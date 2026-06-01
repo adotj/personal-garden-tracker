@@ -61,6 +61,7 @@ import { GardenHeader, GardenWeather } from '@/components/GardenHeader';
 import { PlantGrid } from '@/components/PlantGrid';
 import { ActivityLog } from '@/components/ActivityLog';
 import { PushNotificationCard } from '@/components/PushNotificationCard';
+import { currentClientCareDay } from '@/lib/watering-schedule';
 
 function toCsvCell(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
@@ -69,24 +70,6 @@ function toCsvCell(value: string): string {
 
 function dateInputToday(): string {
   return new Date().toISOString().split('T')[0];
-}
-
-type ClientCareDay = {
-  todayDateKey: string;
-  startIso: string;
-  endIso: string;
-};
-
-function currentClientCareDay(now: Date = new Date()): ClientCareDay {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return {
-    todayDateKey: format(start, 'yyyy-MM-dd'),
-    startIso: start.toISOString(),
-    endIso: end.toISOString(),
-  };
 }
 
 function createDefaultNewPlant(): NewPlantForm {
@@ -557,10 +540,10 @@ export function GardenPageClient() {
       return;
     }
     if (result.data.alreadyToday) {
-      toast.info(`${name} is already marked as watered today.`);
-      return;
+      toast.info(`${name} was already watered today — schedule refreshed.`);
+    } else {
+      toast.success(`✅ ${name} marked watered`);
     }
-    toast.success(`✅ ${name} marked watered`);
     setPlants((prev) =>
       prev.map((plant) => (plant.id === id ? { ...plant, last_watered: result.data.when } : plant)),
     );

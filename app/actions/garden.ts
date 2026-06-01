@@ -23,13 +23,11 @@ import { sunExposureLabel } from '@/lib/plant-types';
 import { datetimeLocalToIsoUtc } from '@/lib/photo-timeline';
 import { format, isValid, parseISO } from 'date-fns';
 import { LAVEEN_LATITUDE, LAVEEN_LONGITUDE } from '@/lib/weather';
+import type { ClientCareDay } from '@/lib/watering-schedule';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
-type ClientCareDay = {
-  todayDateKey: string;
-  startIso: string;
-  endIso: string;
-};
+
+export type { ClientCareDay };
 
 type ParsedClientCareDay = {
   todayDateKey: string;
@@ -341,14 +339,14 @@ export async function markWateredAction(
     if (plantErr || !plant) {
       return { ok: false, error: plantErr?.message || 'Plant not found' };
     }
-    if (isPlantCareDateInClientDay(plant.last_watered, parsedClientCareDay)) {
-      return { ok: true, data: { alreadyToday: true, when: plant.last_watered || '', name: plant.name } };
-    }
+    const alreadyToday = isPlantCareDateInClientDay(plant.last_watered, parsedClientCareDay);
     const when = wateringLoggedAtIso();
     const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', id);
     if (error) return { ok: false, error: error.message || 'Could not mark watered' };
-    await logPlantWateredActivities(supabase, [plant.name], when);
-    return { ok: true, data: { alreadyToday: false, when, name: plant.name } };
+    if (!alreadyToday) {
+      await logPlantWateredActivities(supabase, [plant.name], when);
+    }
+    return { ok: true, data: { alreadyToday, when, name: plant.name } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not mark watered' };
   }

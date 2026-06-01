@@ -1,5 +1,6 @@
 import { addDays, format, isValid, parseISO, startOfDay } from 'date-fns';
 import type { Plant } from '@/lib/plant-types';
+import { parseCareAnchorDate } from '@/lib/watering-schedule';
 
 const DAY_KEY = 'yyyy-MM-dd';
 
@@ -25,8 +26,8 @@ export function wateringDueDateKeysForPlant(
     return keys;
   }
 
-  const last = startOfDay(parseISO(plant.last_watered));
-  if (!isValid(last)) {
+  const last = parseCareAnchorDate(plant.last_watered);
+  if (!last) {
     keys.add(format(rs, DAY_KEY));
     return keys;
   }

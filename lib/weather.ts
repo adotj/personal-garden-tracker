@@ -1,5 +1,6 @@
 import { addDays, isValid, parseISO, startOfDay } from 'date-fns';
 import type { Plant } from '@/lib/plant-types';
+import { baseWateringDueDate as wateringDueFromLastWatered } from '@/lib/watering-schedule';
 
 /** Laveen, AZ — shared with dashboard weather in fetchWeatherAction */
 export const LAVEEN_LATITUDE = 33.3625;
@@ -137,12 +138,9 @@ export async function fetchPhoenixForecast(): Promise<Forecast> {
 }
 
 function baseWateringDueDate(plant: Plant): Date {
-  const frequency = Math.max(1, plant.watering_frequency_days || 1);
-  const lastWatered = plant.last_watered ? new Date(plant.last_watered) : null;
-  if (lastWatered && isValid(lastWatered)) {
-    return addDays(lastWatered, frequency);
-  }
-  return addDays(new Date(), frequency);
+  const due = wateringDueFromLastWatered(plant.last_watered, plant.watering_frequency_days);
+  if (due) return due;
+  return addDays(new Date(), Math.max(1, plant.watering_frequency_days || 1));
 }
 
 /** Rain delay only when measurable precip is forecast on or before the plant's due date */
