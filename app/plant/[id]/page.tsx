@@ -9,6 +9,7 @@ import { SUN_EXPOSURE_OPTIONS, sunExposureLabel } from '@/lib/plant-types';
 import {
   formatPlantCareInstant,
   isoOrDateToDateInputValue,
+  clientLocalDateKey,
   isPlantCareDateToday,
   normalizePlantRow,
   normalizeSunExposure,
@@ -220,6 +221,7 @@ export default function PlantProfile() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [careBusy, setCareBusy] = useState<'water' | 'fert' | null>(null);
+  const [hasWriteSession, setHasWriteSession] = useState<boolean | null>(null);
   const isWriteDisabled = false;
   const [fertilizerLogs, setFertilizerLogs] = useState<FertilizerLogRow[]>([]);
   const [fertDraft, setFertDraft] = useState<{ seasons: FertilizerSeason[]; notes: string }>({
@@ -268,6 +270,18 @@ export default function PlantProfile() {
   useEffect(() => {
     plantRef.current = plant;
   }, [plant]);
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      setHasWriteSession(!!data.session);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setHasWriteSession(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const fetchPlant = useCallback(async () => {
     const { data, error } = await supabase
@@ -565,26 +579,47 @@ export default function PlantProfile() {
     if (!plant || isWriteDisabled) return;
     setCareBusy('water');
     try {
-      const result = await markPlantWateredClient(supabase, plantId, plant.name);
-      if (!result.ok) {
-        toast.error(result.error || 'Could not update watering');
-        return;
+      let when: string | null = null;
+      let alreadyToday = false;
+
+      const clientResult = await markPlantWateredClient(supabase, plantId, plant.name);
+      if (clientResult.ok) {
+        when = clientResult.when;
+        alreadyToday = clientResult.alreadyToday;
+      } else {
+        const today = clientLocalDateKey();
+        const fallback = await saveWateringSettingsAction({
+          plantId,
+          wateringFrequencyDays: plant.watering_frequency_days,
+          lastWatered: today,
+        });
+        if (!fallback.ok) {
+          toast.error(
+            [clientResult.error, fallback.error].filter(Boolean).join(' · ') ||
+              'Could not update watering',
+          );
+          return;
+        }
+        when = today;
+        alreadyToday = isPlantCareDateToday(plant.last_watered);
       }
-      if (result.alreadyToday) {
+
+      if (alreadyToday) {
         toast.info(`${plant.name} was already watered today — schedule refreshed.`);
       } else {
         toast.success(`${plant.name} watered`);
       }
-      setPlant((prev) => (prev ? { ...prev, last_watered: result.when } : prev));
+      setPlant((prev) => (prev ? { ...prev, last_watered: when } : prev));
       setWateringDraft({
         frequencyDays: String(plant.watering_frequency_days),
-        lastWatered: isoOrDateToDateInputValue(result.when),
+        lastWatered: isoOrDateToDateInputValue(when),
       });
       await fetchPlant();
       await fetchActivities(plant.name);
     } catch (e) {
       console.error(e);
-      toast.error('Could not update watering');
+      const message = e instanceof Error ? e.message : 'Could not update watering';
+      toast.error(message);
     } finally {
       setCareBusy(null);
     }
@@ -1611,11 +1646,25 @@ export default function PlantProfile() {
                 </div>
               </div>
             </div>
+            {hasWriteSession === false ? (
+              <p className="rounded-xl border border-amber-400/70 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-600/60 dark:bg-amber-950/40 dark:text-amber-100">
+                Sign in on the{' '}
+                <button
+                  type="button"
+                  className="font-semibold underline"
+                  onClick={() => router.push('/')}
+                >
+                  home page
+                </button>{' '}
+                to log watering and fertilizing.
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2 border-t border-desert-mist/60 pt-4 dark:border-zinc-700">
               <Button
                 type="button"
                 className="rounded-full bg-oasis hover:bg-oasis-hover"
-                disabled={isWriteDisabled || careBusy !== null || wateredToday}
+                disabled={isWriteDisabled || careBusy !== null || wateredToday || hasWriteSession === false}
+                title={hasWriteSession === false ? 'Sign in on the home page to log watering' : undefined}
                 onClick={() => void markWateredFromProfile()}
               >
                 {careBusy === 'water' ? (
