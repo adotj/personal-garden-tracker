@@ -109,9 +109,12 @@ export function GardenHeader({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto border-t border-desert-border/30 px-4 py-2 sm:px-6">
+      <div className="max-w-7xl mx-auto border-t border-desert-border/40 px-4 pb-3 pt-3 sm:px-6">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-desert-dust dark:text-zinc-400">
+          Garden zone
+        </p>
         <div
-          className="inline-flex w-full max-w-md rounded-full border border-desert-border/60 bg-desert-dune/30 p-1"
+          className="flex w-full rounded-xl border-2 border-desert-border bg-desert-dune/50 p-1 shadow-sm dark:border-zinc-600 dark:bg-zinc-900/90"
           role="tablist"
           aria-label="Garden zone"
         >
@@ -124,10 +127,10 @@ export function GardenHeader({
                 role="tab"
                 aria-selected={active}
                 className={cn(
-                  'flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors',
+                  'flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors',
                   active
-                    ? 'bg-oasis text-white shadow-sm'
-                    : 'text-desert-sage hover:text-desert-ink dark:hover:text-desert-ink',
+                    ? 'bg-oasis text-white shadow-md ring-1 ring-oasis/40'
+                    : 'text-desert-ink/80 hover:bg-desert-mist/50 dark:text-zinc-200 dark:hover:bg-zinc-800',
                 )}
                 onClick={() => onEnvironmentChange(zone)}
               >
