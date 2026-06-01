@@ -25,7 +25,8 @@ import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckbo
 import { uploadPlantImage } from '@/lib/storage-upload';
 import { datetimeLocalToIsoUtc, defaultPhotoTimelineFromFile, toDatetimeLocalValue } from '@/lib/photo-timeline';
 import { buildPlantTroubleshootingPrompt } from '@/lib/plant-ai-prompt';
-import { markFertilizedAction, markWateredAction } from '@/app/actions/garden';
+import { markFertilizedAction } from '@/app/actions/garden';
+import { markPlantWateredClient } from '@/lib/mark-plant-watered';
 import {
   addPlantNoteEntryAction,
   addPlantTimelinePhotoAction,
@@ -72,7 +73,7 @@ import { format, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { calculateWateringAdjustment, fetchPhoenixForecast } from '@/lib/weather';
 import type { Forecast } from '@/lib/weather';
-import { baseWateringDueDate, currentClientCareDay } from '@/lib/watering-schedule';
+import { baseWateringDueDate } from '@/lib/watering-schedule';
 
 type PlantPhotoRow = {
   id: string;
@@ -564,20 +565,20 @@ export default function PlantProfile() {
     if (!plant || isWriteDisabled) return;
     setCareBusy('water');
     try {
-      const result = await markWateredAction(plantId, currentClientCareDay());
+      const result = await markPlantWateredClient(supabase, plantId, plant.name);
       if (!result.ok) {
         toast.error(result.error || 'Could not update watering');
         return;
       }
-      if (result.data.alreadyToday) {
+      if (result.alreadyToday) {
         toast.info(`${plant.name} was already watered today — schedule refreshed.`);
       } else {
         toast.success(`${plant.name} watered`);
       }
-      setPlant((prev) => (prev ? { ...prev, last_watered: result.data.when } : prev));
+      setPlant((prev) => (prev ? { ...prev, last_watered: result.when } : prev));
       setWateringDraft({
         frequencyDays: String(plant.watering_frequency_days),
-        lastWatered: isoOrDateToDateInputValue(result.data.when),
+        lastWatered: isoOrDateToDateInputValue(result.when),
       });
       await fetchPlant();
       await fetchActivities(plant.name);

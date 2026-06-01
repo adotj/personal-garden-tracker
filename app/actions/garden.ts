@@ -23,11 +23,13 @@ import { sunExposureLabel } from '@/lib/plant-types';
 import { datetimeLocalToIsoUtc } from '@/lib/photo-timeline';
 import { format, isValid, parseISO } from 'date-fns';
 import { LAVEEN_LATITUDE, LAVEEN_LONGITUDE } from '@/lib/weather';
-import type { ClientCareDay } from '@/lib/watering-schedule';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
-
-export type { ClientCareDay };
+type ClientCareDay = {
+  todayDateKey: string;
+  startIso: string;
+  endIso: string;
+};
 
 type ParsedClientCareDay = {
   todayDateKey: string;
@@ -330,6 +332,13 @@ export async function markWateredAction(
   try {
     const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { ok: false, error: 'Sign in again to mark plants as watered.' };
+    }
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
       .select('id, name, last_watered')
@@ -341,12 +350,23 @@ export async function markWateredAction(
     }
     const alreadyToday = isPlantCareDateInClientDay(plant.last_watered, parsedClientCareDay);
     const when = wateringLoggedAtIso();
+    let storedWhen = when;
     const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', id);
-    if (error) return { ok: false, error: error.message || 'Could not mark watered' };
-    if (!alreadyToday) {
-      await logPlantWateredActivities(supabase, [plant.name], when);
+    if (error) {
+      const dateOnly = when.slice(0, 10);
+      const { error: retryError } = await supabase
+        .from('plants')
+        .update({ last_watered: dateOnly })
+        .eq('id', id);
+      if (retryError) {
+        return { ok: false, error: retryError.message || error.message || 'Could not mark watered' };
+      }
+      storedWhen = dateOnly;
     }
-    return { ok: true, data: { alreadyToday, when, name: plant.name } };
+    if (!alreadyToday) {
+      await logPlantWateredActivities(supabase, [plant.name], storedWhen);
+    }
+    return { ok: true, data: { alreadyToday, when: storedWhen, name: plant.name } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not mark watered' };
   }
