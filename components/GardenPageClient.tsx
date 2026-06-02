@@ -62,7 +62,6 @@ import {
 import { GardenHeader, GardenWeather } from '@/components/GardenHeader';
 import { PlantGrid } from '@/components/PlantGrid';
 import { ActivityLog } from '@/components/ActivityLog';
-import { PushNotificationCard } from '@/components/PushNotificationCard';
 import { currentClientCareDay } from '@/lib/watering-schedule';
 
 function toCsvCell(value: string): string {
@@ -1066,7 +1065,6 @@ export function GardenPageClient() {
             rainyDayDisabled={isDemoMode || zonePlants.length === 0}
           />
         ) : null}
-        <PushNotificationCard isDemoMode={isDemoMode} plantCount={zonePlants.length} />
 
         {zonePlants.length > 0 && fertilizerUpcoming.length > 0 ? (
           <Card className="mb-10 border-amber-700/30 bg-gradient-to-br from-amber-50/90 to-desert-parchment dark:from-amber-950/40 dark:to-zinc-900 dark:border-amber-900/40">
