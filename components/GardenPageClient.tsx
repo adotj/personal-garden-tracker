@@ -82,6 +82,25 @@ function readInitialEnvironment(): PlantEnvironment {
   return 'outdoor';
 }
 
+function readInitialPlantSearch(): string {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get('q') ?? '';
+}
+
+function syncHomeUrl(zone: PlantEnvironment, search: string) {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  url.searchParams.set('zone', zone);
+  const trimmed = search.trim();
+  if (trimmed) url.searchParams.set('q', trimmed);
+  else url.searchParams.delete('q');
+  const next = `${url.pathname}${url.search}`;
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (current !== next) {
+    window.history.replaceState({}, '', next);
+  }
+}
+
 function createDefaultNewPlant(environment: PlantEnvironment = 'outdoor'): NewPlantForm {
   const today = dateInputToday();
   const isIndoor = environment === 'indoor';
@@ -117,7 +136,7 @@ export function GardenPageClient() {
   const [editingPlant, setEditingPlant] = useState<Plant | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [plantSearch, setPlantSearch] = useState('');
+  const [plantSearch, setPlantSearch] = useState(readInitialPlantSearch);
   const [fertDueThisMonthOnly, setFertDueThisMonthOnly] = useState(false);
   const [isFertilizerOpen, setIsFertilizerOpen] = useState(false);
   const [isGardenHeaderCollapsed, setIsGardenHeaderCollapsed] = useState(false);
@@ -174,6 +193,10 @@ export function GardenPageClient() {
     setNewPlant(createDefaultNewPlant(zone));
   }, []);
 
+  useEffect(() => {
+    syncHomeUrl(activeEnvironment, plantSearch);
+  }, [activeEnvironment, plantSearch]);
+
   const handleEnvironmentChange = useCallback((zone: PlantEnvironment) => {
     setActiveEnvironment(zone);
     setPlantSearch('');
@@ -185,9 +208,6 @@ export function GardenPageClient() {
     setNewPlant(createDefaultNewPlant(zone));
     setNewPhotoTimelineAt(toDatetimeLocalValue(new Date()));
     localStorage.setItem('gardenZone', zone);
-    const url = new URL(window.location.href);
-    url.searchParams.set('zone', zone);
-    window.history.replaceState({}, '', `${url.pathname}${url.search}`);
   }, [newPreviewUrl]);
 
   useEffect(() => {

@@ -1090,7 +1090,13 @@ export default function PlantProfile() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.push(`/?zone=${plant.environment}`)}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                  return;
+                }
+                router.push(`/?zone=${plant.environment}`);
+              }}
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
