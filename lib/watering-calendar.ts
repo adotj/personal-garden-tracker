@@ -1,6 +1,8 @@
-import { addDays, format, isValid, parseISO, startOfDay } from 'date-fns';
+import { addDays, format, isSameDay, parseISO, startOfDay } from 'date-fns';
 import type { Plant } from '@/lib/plant-types';
 import { parseCareAnchorDate } from '@/lib/watering-schedule';
+import type { Forecast } from '@/lib/weather';
+import { calculateWateringAdjustment } from '@/lib/weather';
 
 const DAY_KEY = 'yyyy-MM-dd';
 
@@ -15,6 +17,7 @@ export function wateringDueDateKeysForPlant(
   plant: Plant,
   rangeStart: Date,
   rangeEnd: Date,
+  forecast?: Forecast | null,
 ): Set<string> {
   const freq = Math.max(1, plant.watering_frequency_days || 7);
   const keys = new Set<string>();
@@ -32,15 +35,28 @@ export function wateringDueDateKeysForPlant(
     return keys;
   }
 
+  const baseFirstDue = addDays(last, freq);
+  const effectiveFirstDue = forecast
+    ? calculateWateringAdjustment(plant, forecast).adjustedDueDate
+    : baseFirstDue;
+
+  const firstKey =
+    effectiveFirstDue < rs
+      ? format(rs, DAY_KEY)
+      : effectiveFirstDue <= re
+        ? format(effectiveFirstDue, DAY_KEY)
+        : null;
+  if (firstKey) keys.add(firstKey);
+
   let next = addDays(last, freq);
   while (next <= re) {
-    if (next >= rs) keys.add(format(next, DAY_KEY));
+    if (next >= rs) {
+      const key = format(next, DAY_KEY);
+      const replacedBaseFirst =
+        !isSameDay(effectiveFirstDue, baseFirstDue) && isSameDay(next, baseFirstDue);
+      if (!replacedBaseFirst && key !== firstKey) keys.add(key);
+    }
     next = addDays(next, freq);
-  }
-
-  const firstDue = addDays(last, freq);
-  if (keys.size === 0 && firstDue < rs) {
-    keys.add(format(rs, DAY_KEY));
   }
 
   return keys;
@@ -51,6 +67,7 @@ export function buildWateringCalendar(
   plants: Plant[],
   numDays: number,
   now: Date = new Date(),
+  forecast?: Forecast | null,
 ): WateringCalendarDay[] {
   const start = startOfDay(now);
   const end = startOfDay(addDays(start, numDays - 1));
@@ -61,7 +78,7 @@ export function buildWateringCalendar(
   }
 
   for (const plant of plants) {
-    const dueKeys = wateringDueDateKeysForPlant(plant, start, end);
+    const dueKeys = wateringDueDateKeysForPlant(plant, start, end, forecast);
     for (const key of dueKeys) {
       const list = bucket.get(key);
       if (list) list.push(plant);

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Plant } from '@/lib/plant-types';
 import { buildWateringCalendar } from '@/lib/watering-calendar';
+import { fetchPhoenixForecast, type Forecast } from '@/lib/weather';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, Check, ChevronDown, Droplet } from 'lucide-react';
@@ -27,7 +28,26 @@ export function WateringCalendar({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [selectedTodayIds, setSelectedTodayIds] = useState<string[]>([]);
-  const rows = useMemo(() => buildWateringCalendar(plants, numDays), [plants, numDays]);
+  const [forecast, setForecast] = useState<Forecast | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPhoenixForecast()
+      .then((data) => {
+        if (!cancelled) setForecast(data);
+      })
+      .catch(() => {
+        if (!cancelled) setForecast(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const rows = useMemo(
+    () => buildWateringCalendar(plants, numDays, new Date(), forecast),
+    [plants, numDays, forecast],
+  );
   const today = useMemo(() => new Date(), []);
   const todayRow = useMemo(() => rows.find((row) => isSameDay(row.at, today)) ?? null, [rows, today]);
   const dueToday = todayRow?.plants ?? [];
@@ -85,9 +105,9 @@ export function WateringCalendar({
             </CardTitle>
             {open ? (
               <p className="text-sm text-desert-dust">
-                Based on each plant’s last watered date and water-every interval. {rangeLabel}. If a plant had no
-                last watered date, it shows on the first day only — set dates on the plant or profile after you
-                water.
+                Based on each plant’s last watered date, water-every interval, and heat/rain forecast adjustments.
+                Overdue plants appear under today. {rangeLabel}. If a plant had no last watered date, it shows on the
+                first day only — set dates on the plant or profile after you water.
               </p>
             ) : (
               <p className="text-sm text-desert-dust">
