@@ -6,6 +6,11 @@ import { calculateWateringAdjustment } from '@/lib/weather';
 
 const DAY_KEY = 'yyyy-MM-dd';
 
+/** Next due must be after the calendar day the plant was last watered. */
+function isDueAfterLastWatered(due: Date, lastWatered: Date): boolean {
+  return startOfDay(due) > startOfDay(lastWatered);
+}
+
 export type WateringCalendarDay = {
   dateKey: string;
   at: Date;
@@ -40,17 +45,16 @@ export function wateringDueDateKeysForPlant(
     ? calculateWateringAdjustment(plant, forecast).adjustedDueDate
     : baseFirstDue;
 
-  const firstKey =
-    effectiveFirstDue < rs
-      ? format(rs, DAY_KEY)
-      : effectiveFirstDue <= re
-        ? format(effectiveFirstDue, DAY_KEY)
-        : null;
-  if (firstKey) keys.add(firstKey);
+  const firstDue =
+    effectiveFirstDue < rs ? rs : effectiveFirstDue <= re ? effectiveFirstDue : null;
+  if (firstDue && isDueAfterLastWatered(firstDue, last)) {
+    keys.add(format(firstDue, DAY_KEY));
+  }
+  const firstKey = firstDue ? format(firstDue, DAY_KEY) : null;
 
   let next = addDays(last, freq);
   while (next <= re) {
-    if (next >= rs) {
+    if (next >= rs && isDueAfterLastWatered(next, last)) {
       const key = format(next, DAY_KEY);
       const replacedBaseFirst =
         !isSameDay(effectiveFirstDue, baseFirstDue) && isSameDay(next, baseFirstDue);
