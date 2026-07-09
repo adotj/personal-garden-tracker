@@ -29,6 +29,7 @@ import { datetimeLocalToIsoUtc, defaultPhotoTimelineFromFile, toDatetimeLocalVal
 import { buildPlantTroubleshootingPrompt } from '@/lib/plant-ai-prompt';
 import { markFertilizedAction } from '@/app/actions/garden';
 import { markPlantWateredClient } from '@/lib/mark-plant-watered';
+import { currentClientCareDay } from '@/lib/watering-schedule';
 import {
   addPlantNoteEntryAction,
   addPlantTimelinePhotoAction,
@@ -638,7 +639,7 @@ export default function PlantProfile() {
     }
     setCareBusy('fert');
     try {
-      const result = await markFertilizedAction(plantId);
+      const result = await markFertilizedAction(plantId, currentClientCareDay());
       if (!result.ok) {
         toast.error(result.error || 'Could not update fertilizing');
         return;

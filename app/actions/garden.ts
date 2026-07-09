@@ -38,6 +38,19 @@ type ParsedClientCareDay = {
   end: Date;
 };
 
+async function requireSignedInUser(
+  supabase: SupabaseServerClient,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { ok: false, error: 'Sign in again to continue.' };
+  }
+  return { ok: true };
+}
+
 function isDateOnlyIsoString(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
 }
@@ -184,7 +197,8 @@ export async function fetchWeatherAction(): Promise<ActionResult<GardenWeather |
         condition,
         windSpeed: Math.round(current.wind_speed_10m),
         forecast: daily.time.slice(0, 3).map((date: string, i: number) => ({
-          date: format(new Date(date), 'EEE'),
+          // Local noon avoids UTC-midnight weekday shift in America/Phoenix.
+          date: format(parseISO(`${date}T12:00:00`), 'EEE'),
           high: Math.round(daily.temperature_2m_max[i]),
           low: Math.round(daily.temperature_2m_min[i]),
           condition: getWeatherCondition(daily.weather_code[i]),
@@ -200,6 +214,9 @@ export async function fetchWeatherAction(): Promise<ActionResult<GardenWeather |
 export async function addPlantAction(input: AddPlantInput): Promise<ActionResult<{ id: string }>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
     const seasons =
       input.plant.fertilizer_seasons?.length > 0
         ? input.plant.fertilizer_seasons
@@ -234,6 +251,7 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
           fertilizer_seasons: seasons,
           fertilizer_notes: input.plant.fertilizer_notes,
           location_in_garden: input.plant.location_in_garden,
+          species: input.plant.species,
         }),
       )
       .eq('id', inserted.id);
@@ -275,6 +293,9 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
 export async function updatePlantAction(input: UpdatePlantInput): Promise<ActionResult<{ id: string }>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
     const merged = {
       ...input.plant,
       watering_frequency_days: Math.max(1, input.plant.watering_frequency_days),
@@ -334,13 +355,8 @@ export async function markWateredAction(
   try {
     const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return { ok: false, error: 'Sign in again to mark plants as watered.' };
-    }
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return { ok: false, error: 'Sign in again to mark plants as watered.' };
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
       .select('id, name, last_watered')
@@ -355,7 +371,7 @@ export async function markWateredAction(
     let storedWhen = when;
     const { error } = await supabase.from('plants').update({ last_watered: when }).eq('id', id);
     if (error) {
-      const dateOnly = when.slice(0, 10);
+      const dateOnly = parsedClientCareDay?.todayDateKey ?? when.slice(0, 10);
       const { error: retryError } = await supabase
         .from('plants')
         .update({ last_watered: dateOnly })
@@ -384,6 +400,9 @@ export async function markSelectedTodayPlantsWateredAction(
     if (uniqueIds.length === 0) return { ok: false, error: 'Select at least one plant due today.' };
 
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
     const { data: rows, error: rowsErr } = await supabase
       .from('plants')
       .select('id, name, last_watered')
@@ -391,13 +410,38 @@ export async function markSelectedTodayPlantsWateredAction(
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load selected plants' };
     if (rows.length === 0) return { ok: false, error: 'Selected plants could not be found.' };
     const pendingRows = rows.filter((row) => !isPlantCareDateInClientDay(row.last_watered, parsedClientCareDay));
-    const pendingIds = pendingRows.map((row) => row.id as string);
-    const idsToUpdate = pendingIds.length > 0 ? pendingIds : rows.map((row) => row.id as string);
-    const rowsToLog = pendingRows.length > 0 ? pendingRows : rows;
+    // Only update plants not already watered today — never re-stamp already-done plants.
+    if (pendingRows.length === 0) {
+      return { ok: false, error: 'Selected plants are already marked watered today.' };
+    }
+    const idsToUpdate = pendingRows.map((row) => row.id as string);
+    const rowsToLog = pendingRows;
 
     const when = wateringLoggedAtIso();
+    const dateOnlyFallback = parsedClientCareDay?.todayDateKey ?? when.slice(0, 10);
     const { error } = await supabase.from('plants').update({ last_watered: when }).in('id', idsToUpdate);
-    if (error) return { ok: false, error: error.message || 'Could not mark selected plants watered' };
+    if (error) {
+      const dateOnly = dateOnlyFallback;
+      const { error: retryError } = await supabase
+        .from('plants')
+        .update({ last_watered: dateOnly })
+        .in('id', idsToUpdate);
+      if (retryError) {
+        return { ok: false, error: retryError.message || error.message || 'Could not mark selected plants watered' };
+      }
+      await logPlantWateredActivities(
+        supabase,
+        rowsToLog.map((row) => (typeof row.name === 'string' ? row.name : '')),
+        dateOnly,
+      );
+      await logActivity(
+        'Plant Watered',
+        undefined,
+        `Bulk watered ${idsToUpdate.length} plant${idsToUpdate.length === 1 ? '' : 's'}. Last watered is now ${formatPlantCareInstant(dateOnly, 'profile')}.`,
+        dateOnly,
+      );
+      return { ok: true, data: { updatedIds: idsToUpdate, when: dateOnly } };
+    }
 
     await logPlantWateredActivities(
       supabase,
@@ -423,31 +467,48 @@ export async function markAllWateredTodayAction(
   try {
     const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
     const { data: rows, error: rowsErr } = await supabase
       .from('plants')
       .select('id, last_watered')
       .eq('environment', environment);
     if (rowsErr || !rows) return { ok: false, error: rowsErr?.message || 'Could not load plants' };
     if (rows.length === 0) return { ok: false, error: 'No plants to update yet.' };
-    const alreadyWatered = rows.filter((row) =>
-      isPlantCareDateInClientDay(row.last_watered, parsedClientCareDay),
-    ).length;
-    if (alreadyWatered === rows.length) {
+    const pendingIds = rows
+      .filter((row) => !isPlantCareDateInClientDay(row.last_watered, parsedClientCareDay))
+      .map((row) => row.id as string);
+    if (pendingIds.length === 0) {
       return { ok: false, error: 'All plants are already marked watered today.' };
     }
     const when = wateringLoggedAtIso();
-    const { error } = await supabase
-      .from('plants')
-      .update({ last_watered: when })
-      .eq('environment', environment);
-    if (error) return { ok: false, error: error.message || 'Could not apply rainy day watering' };
+    const dateOnlyFallback = parsedClientCareDay?.todayDateKey ?? when.slice(0, 10);
+    const { error } = await supabase.from('plants').update({ last_watered: when }).in('id', pendingIds);
+    if (error) {
+      const dateOnly = dateOnlyFallback;
+      const { error: retryError } = await supabase
+        .from('plants')
+        .update({ last_watered: dateOnly })
+        .in('id', pendingIds);
+      if (retryError) {
+        return { ok: false, error: retryError.message || error.message || 'Could not apply rainy day watering' };
+      }
+      const zoneLabel = environment === 'indoor' ? 'indoor' : 'outdoor';
+      await logActivity(
+        'Rainy Day',
+        undefined,
+        `Set last watered to ${formatPlantCareInstant(dateOnly, 'profile')} for ${pendingIds.length} ${zoneLabel} plants.`,
+      );
+      return { ok: true, data: { when: dateOnly, total: pendingIds.length } };
+    }
     const zoneLabel = environment === 'indoor' ? 'indoor' : 'outdoor';
     await logActivity(
       'Rainy Day',
       undefined,
-      `Set last watered to ${formatPlantCareInstant(when, 'profile')} for all ${rows.length} ${zoneLabel} plants.`,
+      `Set last watered to ${formatPlantCareInstant(when, 'profile')} for ${pendingIds.length} ${zoneLabel} plants.`,
     );
-    return { ok: true, data: { when, total: rows.length } };
+    return { ok: true, data: { when, total: pendingIds.length } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not apply rainy day watering' };
   }
@@ -455,16 +516,21 @@ export async function markAllWateredTodayAction(
 
 export async function markFertilizedAction(
   id: string,
+  clientCareDay?: ClientCareDay,
 ): Promise<ActionResult<{ alreadyToday: boolean; fertilizedDate: string; name: string }>> {
   try {
+    const parsedClientCareDay = parseClientCareDay(clientCareDay);
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
       .select('id, name, last_fertilized, fertilizer_frequency_days')
       .eq('id', id)
       .single();
     if (plantErr || !plant) return { ok: false, error: plantErr?.message || 'Plant not found' };
-    if (isPlantCareDateToday(plant.last_fertilized)) {
+    if (isPlantCareDateInClientDay(plant.last_fertilized, parsedClientCareDay)) {
       return {
         ok: true,
         data: { alreadyToday: true, fertilizedDate: plant.last_fertilized || '', name: plant.name },
@@ -480,7 +546,9 @@ export async function markFertilizedAction(
       return { ok: false, error: logError?.message || 'Failed to record fertilizing' };
     }
 
-    const fertilizedDate = format(new Date(logRow.created_at), 'yyyy-MM-dd');
+    // Prefer the client's local calendar day so late-evening AZ taps don't store UTC tomorrow.
+    const fertilizedDate =
+      parsedClientCareDay?.todayDateKey ?? format(new Date(logRow.created_at), 'yyyy-MM-dd');
     const { data: updated, error: plantError } = await supabase
       .from('plants')
       .update({ last_fertilized: fertilizedDate })
@@ -519,6 +587,9 @@ export async function markFertilizedAction(
 export async function deletePlantAction(id: string): Promise<ActionResult<{ name: string; deletedImages: number }>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
     const { data: plant, error: plantErr } = await supabase
       .from('plants')
       .select('id, name, photo_url')
@@ -562,6 +633,9 @@ export async function deletePlantAction(id: string): Promise<ActionResult<{ name
 export async function clearActivityLogAction(): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
     const { error } = await supabase
       .from('activity_logs')
       .delete()

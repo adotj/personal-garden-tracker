@@ -163,8 +163,19 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    /* Soft dune wash — calmer than a flat sand fill outdoors */
+    background-image:
+      radial-gradient(ellipse 120% 80% at 10% -10%, color-mix(in oklab, var(--oasis) 8%, transparent), transparent 55%),
+      radial-gradient(ellipse 90% 60% at 100% 0%, color-mix(in oklab, #c47a3a 10%, transparent), transparent 50%),
+      linear-gradient(180deg, var(--desert-page), color-mix(in oklab, var(--desert-page) 88%, var(--desert-dune)));
+    background-attachment: fixed;
   }
   html {
     @apply font-sans;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(ellipse 100% 70% at 0% 0%, color-mix(in oklab, var(--oasis) 12%, transparent), transparent 50%),
+      linear-gradient(180deg, var(--desert-page), color-mix(in oklab, var(--desert-page) 92%, black));
   }
 }

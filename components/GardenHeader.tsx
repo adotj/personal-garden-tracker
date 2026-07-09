@@ -244,18 +244,28 @@ export function GardenWeather({
   rainyDayDisabled,
 }: GardenWeatherProps) {
   if (!weather) return null;
+  const isHot = weather.temperature >= 105;
+  const isVeryHot = weather.temperature >= 110;
   return (
-    <div className="mb-12 bg-desert-parchment rounded-3xl p-8 border border-desert-border shadow-sm">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="text-sm text-desert-dust">
-          3-day forecast
+    <section
+      className={cn(
+        'mb-10 overflow-hidden rounded-3xl border border-desert-border/80 shadow-sm',
+        'bg-gradient-to-br from-desert-parchment via-desert-parchment to-desert-dune/60',
+        isVeryHot && 'ring-1 ring-orange-500/40',
+      )}
+      aria-label="Laveen weather"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-desert-border/40 px-5 py-3 sm:px-7">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-desert-dust">Laveen · America/Phoenix</p>
+          <p className="text-sm text-desert-sage">3-day outlook for watering adjustments</p>
         </div>
         {showRainyDayButton ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-9 rounded-full px-3 text-xs sm:text-sm"
+            className="h-10 rounded-xl px-3 text-xs sm:text-sm"
             onClick={onMarkAllWateredToday}
             disabled={rainyDayDisabled}
           >
@@ -264,28 +274,50 @@ export function GardenWeather({
           </Button>
         ) : null}
       </div>
-      <div className="flex items-center gap-8 mb-8">
-        <Sun className="h-12 w-12 text-amber-500" />
-        <div>
-          <div className="text-7xl font-light">{weather.temperature}°F</div>
-          <div className="text-2xl text-desert-dust">{weather.condition}</div>
+
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-4 px-5 py-6 sm:px-7">
+        <div className="flex items-end gap-4">
+          <Sun
+            className={cn(
+              'mb-1 h-10 w-10 shrink-0 sm:h-12 sm:w-12',
+              isVeryHot ? 'text-orange-600' : isHot ? 'text-amber-500' : 'text-amber-400',
+            )}
+            aria-hidden
+          />
+          <div>
+            <div className="font-heading text-5xl font-light tracking-tight text-desert-ink sm:text-6xl">
+              {weather.temperature}
+              <span className="text-3xl text-desert-dust">°F</span>
+            </div>
+            <div className="text-lg text-desert-sage sm:text-xl">{weather.condition}</div>
+          </div>
         </div>
-        <div className="text-sm text-desert-dust">
-          Wind: {weather.windSpeed} mph
+        <div className="space-y-1 text-sm text-desert-dust">
+          <p>Wind {weather.windSpeed} mph</p>
+          {isHot ? (
+            <p className={cn('font-medium', isVeryHot ? 'text-orange-700 dark:text-orange-300' : 'text-amber-800 dark:text-amber-300')}>
+              {isVeryHot ? 'Extreme heat — containers dry fast' : 'Heat advisory range — check thirsty pots'}
+            </p>
+          ) : null}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 border-t border-desert-border/40 bg-desert-dune/25 px-3 py-3 sm:gap-3 sm:px-5 sm:py-4">
         {weather.forecast?.map((day, index) => (
-          <div key={index} className="text-center bg-desert-dune rounded-2xl p-5 border border-desert-mist">
-            <div className="font-medium text-sm mb-2">{day.date}</div>
-            <div className="text-4xl mb-3">{day.icon}</div>
-            <div className="text-3xl font-light mb-1">{day.high}°</div>
-            <div className="text-sm text-desert-dust">{day.low}°</div>
-            <div className="text-xs mt-2 text-desert-dust">{day.condition}</div>
+          <div
+            key={`${day.date}-${index}`}
+            className="rounded-2xl border border-desert-border/50 bg-desert-parchment/80 px-2 py-3 text-center sm:px-3 sm:py-4"
+          >
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-desert-dust">{day.date}</div>
+            <div className="mb-2 text-2xl sm:text-3xl" aria-hidden>
+              {day.icon}
+            </div>
+            <div className="font-heading text-xl font-light text-desert-ink sm:text-2xl">{day.high}°</div>
+            <div className="text-xs text-desert-dust sm:text-sm">{day.low}°</div>
+            <div className="mt-1 text-[10px] text-desert-sage sm:text-xs">{day.condition}</div>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

@@ -43,6 +43,7 @@ export type AddPlantInput = {
   environment: PlantEnvironment;
   plant: {
     name: string;
+    species?: string;
     container_type: string;
     pot_size: string;
     sun_exposure: SunExposure;

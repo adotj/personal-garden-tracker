@@ -6,6 +6,8 @@ import { normalizeSunExposure } from '@/lib/plant-helpers';
 import { normalizeFertilizerSeasons } from '@/lib/fertilizer-schedule';
 import type { FertilizerSeason, SunExposure } from '@/lib/plant-types';
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
 function isSchemaColumnMissingError(error: { code?: string; message?: string | null } | null): boolean {
   if (!error) return false;
   if (error.code === 'PGRST204') return true;
@@ -20,6 +22,19 @@ function toStoragePath(photoUrl: string): string | null {
   return decodeURIComponent(photoUrl.slice(idx + marker.length));
 }
 
+async function requireSignedInUser(
+  supabase: SupabaseServerClient,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { ok: false, error: 'Sign in again to continue.' };
+  }
+  return { ok: true };
+}
+
 export async function savePlantHeaderFieldsAction(input: {
   plantId: string;
   containerType: string;
@@ -29,6 +44,8 @@ export async function savePlantHeaderFieldsAction(input: {
 }): Promise<ActionResult<{ extendedColumnsMissing: boolean }>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error: coreError } = await supabase
       .from('plants')
       .update({
@@ -65,6 +82,8 @@ export async function saveWateringSettingsAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error } = await supabase
       .from('plants')
       .update({
@@ -86,6 +105,8 @@ export async function saveFertilizerSettingsAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error } = await supabase
       .from('plants')
       .update({
@@ -109,6 +130,8 @@ export async function saveFertilizerScheduleAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error: scheduleError } = await supabase
       .from('plants')
       .update({
@@ -138,6 +161,8 @@ export async function addPlantNoteEntryAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error } = await supabase.from('plant_note_entries').insert({
       plant_id: input.plantId,
       body: input.body,
@@ -155,6 +180,8 @@ export async function deletePlantNoteEntryAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error } = await supabase
       .from('plant_note_entries')
       .delete()
@@ -174,6 +201,8 @@ export async function deletePlantPhotoAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const storagePath = toStoragePath(input.photoUrl);
     if (!storagePath) return { ok: false, error: 'Photo URL is not in the plant-photos bucket format' };
 
@@ -202,6 +231,8 @@ export async function deletePlantPhotoAction(input: {
 export async function deleteUploadedPlantPhotoByUrlAction(photoUrl: string): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const storagePath = toStoragePath(photoUrl);
     if (!storagePath) return { ok: false, error: 'Photo URL is not in the plant-photos bucket format' };
     const { error } = await supabase.storage.from('plant-photos').remove([storagePath]);
@@ -219,6 +250,8 @@ export async function updatePhotoTimelineDateAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error } = await supabase
       .from('plant_photos')
       .update({ created_at: input.createdAtIso })
@@ -239,6 +272,8 @@ export async function addPlantTimelinePhotoAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error: photoError } = await supabase.from('plant_photos').insert({
       plant_id: input.plantId,
       photo_url: input.photoUrl,
@@ -264,6 +299,8 @@ export async function setPlantProfilePhotoAction(input: {
 }): Promise<ActionResult<null>> {
   try {
     const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
     const { error } = await supabase.from('plants').update({ photo_url: input.photoUrl }).eq('id', input.plantId);
     if (error) return { ok: false, error: error.message || 'Could not set profile picture' };
     return { ok: true, data: null };

@@ -1,5 +1,6 @@
-import { addDays, format, isSameMonth, isValid, parseISO, startOfDay } from 'date-fns';
+import { addDays, format, isSameMonth, startOfDay } from 'date-fns';
 import type { FertilizerSeason, Plant } from '@/lib/plant-types';
+import { parseCareAnchorDate } from '@/lib/watering-schedule';
 
 /** Northern hemisphere month groups (calendar month 1–12) */
 export const SEASON_MONTHS: Record<FertilizerSeason, readonly number[]> = {
@@ -84,11 +85,13 @@ export function computeNextFertilizationDue(plant: Plant, now: Date = new Date()
   const today = startOfDay(now);
   let candidate: Date;
   if (plant.last_fertilized) {
-    const last = parseISO(plant.last_fertilized);
-    if (!isValid(last)) {
+    // Date-only strings must use local noon anchor — parseISO('yyyy-MM-dd') is UTC midnight
+    // and shifts the calendar day backward in America/Phoenix (UTC−7, no DST).
+    const last = parseCareAnchorDate(plant.last_fertilized);
+    if (!last) {
       candidate = snapToAllowedFertilizerDay(today, seasons);
     } else {
-      candidate = addDays(startOfDay(last), freq);
+      candidate = addDays(last, freq);
     }
   } else {
     candidate = snapToAllowedFertilizerDay(today, seasons);

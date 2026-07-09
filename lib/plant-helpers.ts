@@ -75,8 +75,8 @@ export function normalizePlantRow(row: Plant): Plant {
 
 /**
  * Writable columns present in a typical `plants` table after repo migrations.
- * Does not include `species` / `location_in_garden` until you run
- * `20260415120000_plants_species_location.sql` and add those keys here.
+ * Core payload stays minimal for older schemas; extended patch includes
+ * species, location, sun, fertilizer, and environment columns.
  */
 /** Columns that exist on older schemas and are safe to update first. */
 export function plantUpdateCorePayload(p: Plant) {
@@ -100,6 +100,7 @@ export function plantUpdateExtendedPatch(p: Plant) {
     fertilizer_seasons: normalizeFertilizerSeasons(p.fertilizer_seasons),
     fertilizer_notes: p.fertilizer_notes ?? null,
     location_in_garden: p.location_in_garden?.trim() ? p.location_in_garden.trim() : null,
+    species: p.species?.trim() ? p.species.trim() : null,
   };
 }
 
@@ -123,7 +124,8 @@ export function plantInsertCorePayload(input: {
   last_fertilized: string;
   photo_url: string | null;
 }) {
-  const today = new Date().toISOString().split('T')[0];
+  // Local calendar day — never UTC `toISOString().slice(0, 10)` (wrong near midnight in AZ).
+  const today = clientLocalDateKey();
   return {
     name: input.name.trim(),
     container_type: input.container_type,
@@ -144,6 +146,7 @@ export function plantInsertExtendedPatch(input: {
   fertilizer_seasons: FertilizerSeason[] | null | undefined;
   fertilizer_notes: string;
   location_in_garden?: string | null;
+  species?: string | null;
 }) {
   return {
     environment: normalizePlantEnvironment(input.environment),
@@ -152,5 +155,6 @@ export function plantInsertExtendedPatch(input: {
     fertilizer_seasons: normalizeFertilizerSeasons(input.fertilizer_seasons),
     fertilizer_notes: input.fertilizer_notes.trim() || null,
     location_in_garden: input.location_in_garden?.trim() ? input.location_in_garden.trim() : null,
+    species: input.species?.trim() ? input.species.trim() : null,
   };
 }

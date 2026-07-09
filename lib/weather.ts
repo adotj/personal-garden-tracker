@@ -158,17 +158,41 @@ export function hasMeasurableRainNearDueDate(forecast: Forecast, baseDueDate: Da
   });
 }
 
+/**
+ * Peak high only on days that can affect this watering cycle:
+ * from today through the base due date (inclusive). Looking at the full 5-day
+ * forecast incorrectly pulled due dates forward when a distant heat spike
+ * had nothing to do with the current interval.
+ */
+export function peakHighThroughDueDate(forecast: Forecast, baseDueDate: Date): number {
+  const today = startOfDay(new Date());
+  const due = startOfDay(baseDueDate);
+  const windowEnd = due < today ? today : due;
+
+  let hottest = -Infinity;
+  for (const day of forecast.days) {
+    const dayDate = parseISO(day.date);
+    if (!isValid(dayDate)) continue;
+    const d = startOfDay(dayDate);
+    if (d < today || d > windowEnd) continue;
+    if (Number.isFinite(day.temperatureMax)) {
+      hottest = Math.max(hottest, day.temperatureMax);
+    }
+  }
+  return hottest;
+}
+
 export function calculateWateringAdjustment(
   plant: Plant,
   forecast: Forecast,
 ): { adjustedDueDate: Date; reason: string; daysShift: number } {
   const baseDueDate = baseWateringDueDate(plant);
-  const hottestDay = forecast.days.reduce((max, day) => Math.max(max, day.temperatureMax), -Infinity);
+  const hottestDay = peakHighThroughDueDate(forecast, baseDueDate);
   const hasRain = hasMeasurableRainNearDueDate(forecast, baseDueDate);
 
   let heatShift = 0;
-  if (hottestDay >= 110) heatShift = -2;
-  else if (hottestDay >= 105) heatShift = -1;
+  if (Number.isFinite(hottestDay) && hottestDay >= 110) heatShift = -2;
+  else if (Number.isFinite(hottestDay) && hottestDay >= 105) heatShift = -1;
 
   const rainShift = hasRain ? 1 : 0;
   const daysShift = heatShift + rainShift;
@@ -176,7 +200,7 @@ export function calculateWateringAdjustment(
 
   let reason = 'No weather adjustment needed.';
   if (daysShift < 0 && rainShift === 0) {
-    reason = `Heat spike forecast (high near ${Math.round(hottestDay)}°F) — watering moved ${Math.abs(daysShift)} day earlier.`;
+    reason = `Heat spike before next watering (high near ${Math.round(hottestDay)}°F) — watering moved ${Math.abs(daysShift)} day earlier.`;
   } else if (daysShift > 0 && heatShift === 0) {
     reason = 'Rain delay — measurable precipitation is forecast, so watering moves 1 day later.';
   } else if (daysShift < 0 && rainShift > 0) {
@@ -184,7 +208,7 @@ export function calculateWateringAdjustment(
   } else if (daysShift === 0 && heatShift !== 0 && rainShift !== 0) {
     reason = 'Heat spike and rain delay cancel out, so next due date stays unchanged.';
   } else if (daysShift === 0) {
-    reason = 'No heat spike (105°F+) or rain delay signal in the 5-day forecast.';
+    reason = 'No heat spike (105°F+) or rain delay before the next watering due date.';
   }
 
   return { adjustedDueDate, reason, daysShift };

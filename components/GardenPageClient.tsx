@@ -9,6 +9,7 @@ import { normalizePlantEnvironment, plantEnvironmentLabel } from '@/lib/plant-en
 import type { FertilizerSeason, Plant, SunExposure } from '@/lib/plant-types';
 import { SUN_EXPOSURE_OPTIONS } from '@/lib/plant-types';
 import {
+  clientLocalDateKey,
   isoOrDateToDateInputValue,
   normalizeSunExposure,
 } from '@/lib/plant-helpers';
@@ -70,7 +71,8 @@ function toCsvCell(value: string): string {
 }
 
 function dateInputToday(): string {
-  return new Date().toISOString().split('T')[0];
+  // Local calendar day (AZ does not observe DST; never use UTC date slice).
+  return clientLocalDateKey();
 }
 
 function readInitialEnvironment(): PlantEnvironment {
@@ -527,6 +529,7 @@ export function GardenPageClient() {
       environment: activeEnvironment,
       plant: {
         name: newPlant.name,
+        species: newPlant.species,
         container_type: newPlant.container_type,
         pot_size: newPlant.pot_size,
         sun_exposure: newPlant.sun_exposure,
@@ -679,7 +682,7 @@ export function GardenPageClient() {
       toast.info(`${name} is in fertilizer off-season.`);
       return;
     }
-    const result = await markFertilizedAction(id);
+    const result = await markFertilizedAction(id, currentClientCareDay());
     if (!result.ok) {
       toast.error(result.error || 'Failed to record fertilizing');
       return;
@@ -903,6 +906,16 @@ export function GardenPageClient() {
                 <div>
                   <Label>Plant Name</Label>
                   <Input required value={newPlant.name} onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })} />
+                </div>
+                <div>
+                  <Label htmlFor="new-plant-species">Species / cultivar (optional)</Label>
+                  <Input
+                    id="new-plant-species"
+                    value={newPlant.species}
+                    onChange={(e) => setNewPlant({ ...newPlant, species: e.target.value })}
+                    placeholder="e.g. Ocimum basilicum"
+                    disabled={isDemoMode}
+                  />
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div>
@@ -1176,11 +1189,16 @@ export function GardenPageClient() {
         ) : null}
 
         {zonePlants.length === 0 ? (
-          <Card className="mb-16 rounded-3xl border border-desert-border bg-desert-parchment">
-            <CardContent className="py-16 text-center">
-              <p className="text-lg text-desert-sage">
-                No {activeEnvironment === 'indoor' ? 'indoor' : 'outdoor'} plants yet. Add your first with{' '}
-                <span className="font-medium text-oasis">New Plant</span>.
+          <Card className="mb-16 overflow-hidden rounded-3xl border border-dashed border-desert-border/80 bg-gradient-to-b from-desert-parchment to-desert-dune/40">
+            <CardContent className="flex flex-col items-center py-16 text-center">
+              <span className="mb-3 text-4xl" aria-hidden>
+                {activeEnvironment === 'indoor' ? '🪴' : '🌵'}
+              </span>
+              <p className="font-heading text-xl font-semibold text-oasis">
+                Your {activeEnvironment === 'indoor' ? 'indoor' : 'outdoor'} garden is empty
+              </p>
+              <p className="mt-2 max-w-md text-sm text-desert-sage">
+                Add a plant with New Plant — desert presets fill watering and fertilizer defaults for Laveen heat.
               </p>
             </CardContent>
           </Card>
@@ -1241,6 +1259,16 @@ export function GardenPageClient() {
               <div>
                 <Label>Plant Name</Label>
                 <Input value={editingPlant.name} onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })} />
+              </div>
+              <div>
+                <Label htmlFor="edit-plant-species">Species / cultivar (optional)</Label>
+                <Input
+                  id="edit-plant-species"
+                  value={editingPlant.species ?? ''}
+                  onChange={(e) => setEditingPlant({ ...editingPlant, species: e.target.value })}
+                  placeholder="e.g. Ocimum basilicum"
+                  disabled={isDemoMode}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
