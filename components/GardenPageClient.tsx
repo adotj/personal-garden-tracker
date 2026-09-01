@@ -59,9 +59,11 @@ import {
   markSelectedTodayPlantsWateredAction,
   markWateredAction,
   updatePlantAction,
+  setPlantEnvironmentAction,
 } from '@/app/actions/garden';
 import { GardenHeader, GardenWeather } from '@/components/GardenHeader';
 import { PlantGrid } from '@/components/PlantGrid';
+import { PlantEnvironmentPicker } from '@/components/PlantEnvironmentPicker';
 import { ActivityLog } from '@/components/ActivityLog';
 import { currentClientCareDay } from '@/lib/watering-schedule';
 
@@ -713,6 +715,19 @@ export function GardenPageClient() {
     await fetchActivities();
   };
 
+  const movePlantEnvironment = async (plant: Plant) => {
+    if (isWriteDisabled) return;
+    const target: PlantEnvironment = normalizePlantEnvironment(plant.environment) === 'indoor' ? 'outdoor' : 'indoor';
+    const result = await setPlantEnvironmentAction(plant.id, target);
+    if (!result.ok) {
+      toast.error(result.error || 'Could not move plant');
+      return;
+    }
+    toast.success(`${plant.name} moved to ${plantEnvironmentLabel(target)}`);
+    await fetchPlants();
+    await fetchActivities();
+  };
+
   const openEditModal = (plant: Plant) => {
     if (isWriteDisabled) return;
     editPhotoBaselineRef.current = plant.photo_url ?? null;
@@ -1239,6 +1254,7 @@ export function GardenPageClient() {
             onMarkFertilized={markFertilized}
             onEdit={openEditModal}
             onDelete={deletePlant}
+            onMoveEnvironment={movePlantEnvironment}
           />
         )}
 
@@ -1256,6 +1272,12 @@ export function GardenPageClient() {
           </DialogHeader>
           {editingPlant && (
             <form onSubmit={updatePlant} className="space-y-5">
+              <PlantEnvironmentPicker
+                value={normalizePlantEnvironment(editingPlant.environment)}
+                onChange={(environment) => setEditingPlant({ ...editingPlant, environment })}
+                disabled={isDemoMode}
+                id="edit-plant-environment"
+              />
               <div>
                 <Label>Plant Name</Label>
                 <Input value={editingPlant.name} onChange={(e) => setEditingPlant({ ...editingPlant, name: e.target.value })} />

@@ -11,7 +11,8 @@ import { calculateWateringAdjustment } from '@/lib/weather';
 import type { Forecast } from '@/lib/weather';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Droplet, Edit, Leaf, MapPin, Sprout, Trash2 } from 'lucide-react';
+import { Droplet, Edit, Home, Leaf, MapPin, Sprout, Trash2, TreePine } from 'lucide-react';
+import { normalizePlantEnvironment, plantEnvironmentLabel } from '@/lib/plant-environment';
 
 function safeFormatDue(due: Date | null): string {
   if (!due || !isValid(due)) return '';
@@ -38,6 +39,7 @@ type PlantCardProps = {
   onMarkFertilized: (id: string, name: string) => void;
   onEdit: (plant: Plant) => void;
   onDelete: (id: string, name: string) => void;
+  onMoveEnvironment: (plant: Plant) => void;
 };
 
 export function PlantCard({
@@ -48,8 +50,11 @@ export function PlantCard({
   onMarkFertilized,
   onEdit,
   onDelete,
+  onMoveEnvironment,
 }: PlantCardProps) {
   const baseDueDate = baseWateringDueDate(plant.last_watered, plant.watering_frequency_days);
+  const moveTarget: 'indoor' | 'outdoor' =
+    normalizePlantEnvironment(plant.environment) === 'indoor' ? 'outdoor' : 'indoor';
   const wateringAdjustment = baseDueDate && forecast ? calculateWateringAdjustment(plant, forecast) : null;
   const displayDueDate = wateringAdjustment?.adjustedDueDate ?? baseDueDate;
   const water = waterStatus(displayDueDate);
@@ -214,6 +219,24 @@ export function PlantCard({
           >
             <Sprout className="mr-1 h-3.5 w-3.5" />
             {fertilizedToday ? 'Fed' : fertU === 'off_season' ? 'Off' : 'Fert'}
+          </Button>
+        </div>
+
+        <div className="flex gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 flex-1 border-desert-border/80 text-xs"
+            onClick={() => onMoveEnvironment(plant)}
+            disabled={isDemoMode}
+            aria-label={`Move ${plant.name} to ${plantEnvironmentLabel(moveTarget)}`}
+          >
+            {moveTarget === 'indoor' ? (
+              <Home className="mr-1 h-3.5 w-3.5" />
+            ) : (
+              <TreePine className="mr-1 h-3.5 w-3.5" />
+            )}
+            Move to {plantEnvironmentLabel(moveTarget)}
           </Button>
         </div>
 

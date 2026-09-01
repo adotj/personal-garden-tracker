@@ -3,6 +3,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import type { ActionResult, Activity, AddPlantInput, GardenWeather, UpdatePlantInput } from '@/lib/garden-types';
 import type { PlantEnvironment } from '@/lib/plant-environment';
+import { normalizePlantEnvironment, plantEnvironmentLabel } from '@/lib/plant-environment';
 import type { Plant } from '@/lib/plant-types';
 import {
   formatPlantCareInstant,
@@ -10,6 +11,7 @@ import {
   normalizePlantRow,
   plantInsertCorePayload,
   plantInsertExtendedPatch,
+  plantInsertPayload,
   plantUpdateCorePayload,
   plantUpdateExtendedPatch,
   wateringLoggedAtIso,
@@ -222,7 +224,15 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
         ? input.plant.fertilizer_seasons
         : [...ALL_FERTILIZER_SEASONS];
     const fertilizerFrequencyDays = normalizeFertilizerFrequencyDays(input.plant.fertilizer_frequency_days, 30);
-
+    const extendedPatch = plantInsertExtendedPatch({
+      environment: input.environment,
+      sun_exposure: input.plant.sun_exposure,
+      fertilizer_frequency_days: fertilizerFrequencyDays,
+      fertilizer_seasons: seasons,
+      fertilizer_notes: input.plant.fertilizer_notes,
+      location_in_garden: input.plant.location_in_garden,
+      species: input.plant.species,
+    });
     const coreRow = plantInsertCorePayload({
       name: input.plant.name,
       container_type: input.plant.container_type,
@@ -232,37 +242,69 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
       last_fertilized: input.plant.last_fertilized,
       photo_url: input.plant.photo_url,
     });
-    const { data: inserted, error } = await supabase
+    const fullRow = plantInsertPayload(
+      {
+        name: input.plant.name,
+        container_type: input.plant.container_type,
+        pot_size: input.plant.pot_size,
+        watering_frequency_days: Math.max(1, input.plant.watering_frequency_days),
+        last_watered: input.plant.last_watered,
+        last_fertilized: input.plant.last_fertilized,
+        photo_url: input.plant.photo_url,
+      },
+      {
+        environment: input.environment,
+        sun_exposure: input.plant.sun_exposure,
+        fertilizer_frequency_days: fertilizerFrequencyDays,
+        fertilizer_seasons: seasons,
+        fertilizer_notes: input.plant.fertilizer_notes,
+        location_in_garden: input.plant.location_in_garden,
+        species: input.plant.species,
+      },
+    );
+
+    let insertedId: string | null = null;
+    const { data: insertedFull, error: fullError } = await supabase
       .from('plants')
-      .insert([coreRow])
+      .insert([fullRow])
       .select('id')
       .single();
-    if (error || !inserted?.id) {
-      return { ok: false, error: error?.message || 'Failed to add plant' };
+
+    if (fullError || !insertedFull?.id) {
+      const { data: insertedCore, error: coreError } = await supabase
+        .from('plants')
+        .insert([coreRow])
+        .select('id')
+        .single();
+      if (coreError || !insertedCore?.id) {
+        return { ok: false, error: fullError?.message || coreError?.message || 'Failed to add plant' };
+      }
+      const { error: extErr } = await supabase
+        .from('plants')
+        .update(extendedPatch)
+        .eq('id', insertedCore.id);
+      if (extErr) {
+        await supabase.from('plants').delete().eq('id', insertedCore.id);
+        return {
+          ok: false,
+          error:
+            extErr.message ||
+            'Could not save garden zone for this plant. Apply the latest database migrations and try again.',
+        };
+      }
+      insertedId = insertedCore.id;
+    } else {
+      insertedId = insertedFull.id;
     }
 
-    const { error: extErr } = await supabase
-      .from('plants')
-      .update(
-        plantInsertExtendedPatch({
-          environment: input.environment,
-          sun_exposure: input.plant.sun_exposure,
-          fertilizer_frequency_days: fertilizerFrequencyDays,
-          fertilizer_seasons: seasons,
-          fertilizer_notes: input.plant.fertilizer_notes,
-          location_in_garden: input.plant.location_in_garden,
-          species: input.plant.species,
-        }),
-      )
-      .eq('id', inserted.id);
-    if (extErr) {
-      console.warn('plants extended columns update:', extErr);
+    if (!insertedId) {
+      return { ok: false, error: 'Failed to add plant' };
     }
 
     if (input.plant.photo_url) {
       const createdIso = datetimeLocalToIsoUtc(input.photoTimelineAt);
       const { error: timelineErr } = await supabase.from('plant_photos').insert({
-        plant_id: inserted.id,
+        plant_id: insertedId,
         photo_url: input.plant.photo_url,
         ...(createdIso ? { created_at: createdIso } : {}),
       });
@@ -270,6 +312,7 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
     }
 
     const addDetails = [
+      `${plantEnvironmentLabel(input.environment)} zone.`,
       `${coreRow.container_type}, ${coreRow.pot_size}.`,
       `Sun: ${sunExposureLabel(input.plant.sun_exposure)}.`,
       `Water every ${coreRow.watering_frequency_days} day${coreRow.watering_frequency_days === 1 ? '' : 's'}; ${
@@ -284,7 +327,7 @@ export async function addPlantAction(input: AddPlantInput): Promise<ActionResult
     if (input.plant.photo_url) addDetails.push('Homepage photo attached.');
     await logActivity('Plant Added', input.plant.name, addDetails.join(' '));
 
-    return { ok: true, data: { id: inserted.id } };
+    return { ok: true, data: { id: insertedId } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Failed to add plant' };
   }
@@ -315,7 +358,9 @@ export async function updatePlantAction(input: UpdatePlantInput): Promise<Action
       .from('plants')
       .update(plantUpdateExtendedPatch(merged))
       .eq('id', merged.id);
-    if (extError) console.warn('plants extended columns update:', extError);
+    if (extError) {
+      return { ok: false, error: extError.message || 'Failed to update plant details' };
+    }
 
     if (merged.photo_url && merged.photo_url !== input.photoBaseline) {
       const createdIso = datetimeLocalToIsoUtc(input.photoTimelineAt);
@@ -328,6 +373,7 @@ export async function updatePlantAction(input: UpdatePlantInput): Promise<Action
     }
 
     const editDetails = [
+      `${plantEnvironmentLabel(normalizePlantEnvironment(merged.environment))} zone.`,
       `${merged.container_type}, ${merged.pot_size}.`,
       `Sun: ${sunExposureLabel(merged.sun_exposure)}.`,
       `Water every ${merged.watering_frequency_days} day${merged.watering_frequency_days === 1 ? '' : 's'}; ${
@@ -345,6 +391,48 @@ export async function updatePlantAction(input: UpdatePlantInput): Promise<Action
     return { ok: true, data: { id: merged.id } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Failed to update plant' };
+  }
+}
+
+export async function setPlantEnvironmentAction(
+  plantId: string,
+  environment: PlantEnvironment,
+): Promise<ActionResult<{ id: string; name: string; environment: PlantEnvironment }>> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const auth = await requireSignedInUser(supabase);
+    if (!auth.ok) return auth;
+
+    const normalized = normalizePlantEnvironment(environment);
+    const { data: plant, error: plantErr } = await supabase
+      .from('plants')
+      .select('id, name, environment')
+      .eq('id', plantId)
+      .limit(1)
+      .maybeSingle();
+    if (plantErr || !plant) {
+      return { ok: false, error: plantErr?.message || 'Plant not found' };
+    }
+
+    const current = normalizePlantEnvironment(plant.environment);
+    if (current === normalized) {
+      return { ok: true, data: { id: plantId, name: plant.name, environment: normalized } };
+    }
+
+    const { error } = await supabase.from('plants').update({ environment: normalized }).eq('id', plantId);
+    if (error) {
+      return { ok: false, error: error.message || 'Could not move plant to that garden zone' };
+    }
+
+    await logActivity(
+      'Plant Moved',
+      plant.name,
+      `Moved from ${plantEnvironmentLabel(current)} to ${plantEnvironmentLabel(normalized)}.`,
+    );
+
+    return { ok: true, data: { id: plantId, name: plant.name, environment: normalized } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not move plant' };
   }
 }
 

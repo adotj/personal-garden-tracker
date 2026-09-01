@@ -13,6 +13,7 @@ type PlantGridProps = {
   onMarkFertilized: (id: string, name: string) => void;
   onEdit: (plant: Plant) => void;
   onDelete: (id: string, name: string) => void;
+  onMoveEnvironment: (plant: Plant) => void;
 };
 
 export function PlantGrid({
@@ -22,6 +23,7 @@ export function PlantGrid({
   onMarkFertilized,
   onEdit,
   onDelete,
+  onMoveEnvironment,
 }: PlantGridProps) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
 
@@ -51,6 +53,7 @@ export function PlantGrid({
           onMarkFertilized={onMarkFertilized}
           onEdit={onEdit}
           onDelete={onDelete}
+          onMoveEnvironment={onMoveEnvironment}
         />
       ))}
     </div>

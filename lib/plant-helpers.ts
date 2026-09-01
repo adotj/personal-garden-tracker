@@ -138,6 +138,17 @@ export function plantInsertCorePayload(input: {
   };
 }
 
+/** Full insert row — core + extended columns including garden zone. */
+export function plantInsertPayload(
+  core: Parameters<typeof plantInsertCorePayload>[0],
+  extended: Parameters<typeof plantInsertExtendedPatch>[0],
+) {
+  return {
+    ...plantInsertCorePayload(core),
+    ...plantInsertExtendedPatch(extended),
+  };
+}
+
 /** Sun + fertilizer columns from later migrations — best-effort `.update()` after insert. */
 export function plantInsertExtendedPatch(input: {
   environment: PlantEnvironment;
