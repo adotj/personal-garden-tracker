@@ -13,8 +13,16 @@ Run this Next.js app on a machine at home instead of Vercel. **Supabase** (datab
 
 On the **home host** (the PC/NAS that runs the app):
 
+**Linux / macOS:**
+
 ```bash
 cp .env.example .env.local
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Copy-Item .env.example .env.local
 ```
 
 Fill in from **Supabase Dashboard → Project Settings → API**:
@@ -68,7 +76,16 @@ tailscale serve status
 
 Use that **HTTPS** URL (e.g. `https://your-machine.your-tailnet.ts.net`) from phones on cellular with Tailscale **on**. Avoid **Tailscale Funnel** unless you intentionally want a public internet URL.
 
-See also: [scripts/tailscale-serve.example.sh](../scripts/tailscale-serve.example.sh).
+See also: [scripts/tailscale-serve.example.sh](../scripts/tailscale-serve.example.sh) (Linux/macOS) or [scripts/tailscale-serve.example.ps1](../scripts/tailscale-serve.example.ps1) (Windows).
+
+**Windows:** Install Tailscale from the [Windows download page](https://tailscale.com/download/windows). In an elevated PowerShell:
+
+```powershell
+tailscale serve --bg --https=443 http://127.0.0.1:3000
+tailscale serve status
+```
+
+If other PCs on your LAN cannot reach the app, allow **Node.js** (or port **3000**) through **Windows Defender Firewall** for **Private** networks only.
 
 ## 4. Supabase Auth URL configuration
 
@@ -96,7 +113,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now laveen-garden-tracker.service
 ```
 
-### Option B: pm2
+### Option B: pm2 (Linux, macOS, or Windows)
 
 ```bash
 npm install -g pm2
@@ -104,6 +121,15 @@ pm2 start npm --name garden -- run start:lan
 pm2 save
 pm2 startup
 ```
+
+On **Windows**, use `pm2 startup` and follow the printed command so the process restarts after login.
+
+### Option C: Windows Task Scheduler
+
+1. Create a task that runs **At startup** (or at log on).
+2. Action: **Start a program** → `npm` with arguments `run start:lan`.
+3. **Start in:** full path to this repo (where `.env.local` lives).
+4. Enable **Run whether user is logged on or not** only if you need the app while logged out (requires stored credentials).
 
 After reboot, confirm `npm run start:lan` is up before `tailscale serve` can proxy traffic.
 

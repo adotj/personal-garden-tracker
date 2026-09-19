@@ -12,13 +12,13 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Smart, heat-aware watering reminders (adjusted for Arizona desert conditions)
 - Full activity log showing who did what and when
 - Dark mode toggle
-- Supabase email magic-link authentication
+- Supabase email + password authentication
 
 ### What I Learned
 - Building and deploying a full-stack Next.js application from scratch
 - Working with Supabase for database management, file storage, and Row Level Security
 - Handling file uploads and automatic photo cleanup
-- Implementing Supabase Auth with email magic-link sign-in
+- Implementing Supabase Auth with email and password sign-in
 - Using `git-filter-repo` to rewrite Git history and completely remove exposed credentials from all previous commits
 - Responsive design and modern UI development with Tailwind CSS and shadcn/ui
 - Git workflow, self-hosting with Tailscale, and proper management of secrets
