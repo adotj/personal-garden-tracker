@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:lan": "next start -H 0.0.0.0 -p 3000",
     "lint": "eslint",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs"
   },

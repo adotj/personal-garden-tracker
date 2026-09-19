@@ -1,0 +1,20 @@
+# Copy to /etc/systemd/system/laveen-garden-tracker.service and edit paths/user.
+# Requires: Node/npm on PATH, .env.local in WorkingDirectory, `npm run build` already run once.
+
+[Unit]
+Description=Laveen Garden Tracker (Next.js)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_LINUX_USER
+WorkingDirectory=/path/to/laveen-garden-tracker
+Environment=NODE_ENV=production
+EnvironmentFile=/path/to/laveen-garden-tracker/.env.local
+ExecStart=/usr/bin/npm run start:lan
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

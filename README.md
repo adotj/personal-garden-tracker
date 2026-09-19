@@ -2,7 +2,7 @@
 
 A full-stack web app to track plants, watering schedules, photos, and activity in my desert garden (Laveen, AZ).
 
-**Live Demo:** [https://laveen-garden-tracker.vercel.app](https://laveen-garden-tracker.vercel.app)
+**Hosting:** Self-hosted at home with [Tailscale](https://tailscale.com) for remote access—see **[docs/HOSTING.md](docs/HOSTING.md)**. Supabase remains the backend in the cloud.
 
 **Tech Stack:** Next.js 16 (App Router), TypeScript, Supabase (PostgreSQL + Storage), Tailwind CSS, shadcn/ui
 
@@ -21,7 +21,7 @@ A full-stack web app to track plants, watering schedules, photos, and activity i
 - Implementing Supabase Auth with email magic-link sign-in
 - Using `git-filter-repo` to rewrite Git history and completely remove exposed credentials from all previous commits
 - Responsive design and modern UI development with Tailwind CSS and shadcn/ui
-- Git workflow, Vercel deployment, and proper management of secrets
+- Git workflow, self-hosting with Tailscale, and proper management of secrets
 
 ### Challenges Faced
 - Debugging Supabase RLS policies for both the database and storage bucket

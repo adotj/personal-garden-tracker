@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import { withSerwist } from "@serwist/turbopack";
 
-/** Deployed on Vercel — set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the project env. */
+/** Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` (see docs/HOSTING.md). */
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
