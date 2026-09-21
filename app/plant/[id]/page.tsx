@@ -25,6 +25,7 @@ import {
 } from '@/lib/fertilizer-schedule';
 import { FertilizerSeasonCheckboxes } from '@/components/FertilizerSeasonCheckboxes';
 import { uploadPlantImage } from '@/lib/storage-upload';
+import { publicPlantPhotoUrl } from '@/lib/public-plant-photo-url';
 import { datetimeLocalToIsoUtc, defaultPhotoTimelineFromFile, toDatetimeLocalValue } from '@/lib/photo-timeline';
 import { buildPlantTroubleshootingPrompt } from '@/lib/plant-ai-prompt';
 import { markFertilizedAction } from '@/app/actions/garden';
@@ -1331,7 +1332,7 @@ export default function PlantProfile() {
               className="relative h-[min(420px,55vh)] min-h-[220px] w-full rounded-3xl overflow-hidden border border-desert-border shadow-sm"
             >
               <Image
-                src={plant.photo_url}
+                src={publicPlantPhotoUrl(plant.photo_url)!}
                 alt={plant.name}
                 fill
                 className="object-cover"
@@ -1505,7 +1506,7 @@ export default function PlantProfile() {
                         aria-label={`Open photo from ${format(new Date(photo.created_at), 'MMMM d, yyyy h:mm a')}`}
                       >
                         <Image
-                          src={photo.photo_url}
+                          src={publicPlantPhotoUrl(photo.photo_url)!}
                           alt=""
                           fill
                           className="object-cover"
@@ -2182,7 +2183,7 @@ export default function PlantProfile() {
                 onTouchEnd={onSlideshowTouchEnd}
               >
                 <img
-                  src={slideshowPhoto.photo_url}
+                  src={publicPlantPhotoUrl(slideshowPhoto.photo_url)!}
                   alt={`${plant.name} timeline photo`}
                   className="max-h-[80vh] w-auto max-w-full object-contain"
                 />

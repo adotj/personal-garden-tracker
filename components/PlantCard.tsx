@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Droplet, Edit, Home, Leaf, MapPin, Sprout, Trash2, TreePine } from 'lucide-react';
 import { normalizePlantEnvironment, plantEnvironmentLabel } from '@/lib/plant-environment';
+import { publicPlantPhotoUrl } from '@/lib/public-plant-photo-url';
 
 function safeFormatDue(due: Date | null): string {
   if (!due || !isValid(due)) return '';
@@ -62,6 +63,7 @@ export function PlantCard({
   const fertU = fertilizerUrgency(plant);
   const wateredToday = isPlantCareDateToday(plant.last_watered);
   const fertilizedToday = isPlantCareDateToday(plant.last_fertilized);
+  const photoSrc = publicPlantPhotoUrl(plant.photo_url);
 
   return (
     <article
@@ -76,14 +78,14 @@ export function PlantCard({
       )}
     >
       <div className="relative">
-        {plant.photo_url ? (
+        {photoSrc ? (
           <Link
             href={`/plant/${plant.id}`}
             className="relative block aspect-[4/3] overflow-hidden bg-desert-dune"
             aria-label={`Open ${plant.name} profile`}
           >
             <Image
-              src={plant.photo_url}
+              src={photoSrc}
               alt={plant.name}
               fill
               className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"

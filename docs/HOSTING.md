@@ -2,6 +2,8 @@
 
 Run this Next.js app on a machine at home instead of Vercel. **Supabase** (database, auth, storage) stays in the cloud—only the app server moves.
 
+For **self-hosted Supabase** and running **garden + gym + keeper** together, see [SELF_HOST_FULL_STACK.md](./SELF_HOST_FULL_STACK.md) and `E:\Garden Tracker\homelab\`.
+
 ## Prerequisites
 
 - Node.js 20+ and npm
