@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { PlantEnvironment } from '@/lib/plant-environment';
 import { plantEnvironmentEmoji, plantEnvironmentLabel } from '@/lib/plant-environment';
 import { CalendarRange, Copy, Droplet, Home, Moon, Search, Sun, Sun as SunIcon, TreePine, X } from 'lucide-react';
+import { PlantExportDialog } from '@/components/PlantExportDialog';
 
 type GardenHeaderProps = {
   activeEnvironment: PlantEnvironment;
@@ -26,6 +27,7 @@ type GardenHeaderProps = {
   onToggleDarkMode: () => void;
   onLogout: () => void;
   addPlantDialog: ReactNode;
+  totalPlantsInGarden: number;
 };
 
 type GardenWeatherProps = {
@@ -52,6 +54,7 @@ export function GardenHeader({
   onToggleDarkMode,
   onLogout,
   addPlantDialog,
+  totalPlantsInGarden,
 }: GardenHeaderProps) {
   return (
     <header className="sticky top-0 z-50 bg-desert-parchment/95 backdrop-blur border-b border-desert-border">
@@ -192,6 +195,10 @@ export function GardenHeader({
               <Copy className="mr-1.5 h-4 w-4" />
               Copy names
             </Button>
+            <PlantExportDialog
+              defaultEnvironment={activeEnvironment}
+              disabled={totalPlantsInGarden === 0}
+            />
             <div className="relative min-w-0 flex-1">
               <label htmlFor="garden-plant-filter" className="sr-only">
                 Search plants by name

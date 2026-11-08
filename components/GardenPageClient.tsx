@@ -840,6 +840,7 @@ export function GardenPageClient() {
         onClearPlantSearch={() => setPlantSearch('')}
         onToggleDarkMode={toggleDarkMode}
         onLogout={() => void handleLogout()}
+        totalPlantsInGarden={plants.length}
         addPlantDialog={(
           <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
             <DialogTrigger>
